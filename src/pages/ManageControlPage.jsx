@@ -7,8 +7,8 @@ import {
   Eye,
   EyeOff,
   FileUp,
+  Cloud,
   ImagePlus,
-  KeyRound,
   LogOut,
   Pencil,
   Plus,
@@ -28,14 +28,6 @@ import { formatPrice } from "../lib/format.js";
 import { slugify } from "../lib/ids.js";
 import { uploadMenuImage, validateImageFile } from "../lib/imageStorage.js";
 import { buildPublicationZip, downloadBlob, downloadTextFile, menuToJson } from "../lib/menuExport.js";
-import {
-  GITHUB_MENU_REPO,
-  GITHUB_TOKEN_HELP_URL,
-  clearPublishToken,
-  hasPublishToken,
-  savePublishToken,
-  verifyPublishToken,
-} from "../lib/liveMenu.js";
 import { fetchImageSources, fetchPublishedMenu, loadDraftRecord, parseImportedJson } from "../lib/menuStorage.js";
 import { summarizeMenu, validateMenu } from "../lib/menuValidation.js";
 import { getCategoryMap } from "../lib/menuVisibility.js";
@@ -134,9 +126,7 @@ function AdminShell({ onSignOut }) {
         </div>
         {storageError && (
           <p
-            className={`mt-3 rounded-xl px-4 py-3 text-sm ${
-              storageError.includes("GitHub token") ? "bg-amber-50 text-amber-950" : "bg-red-50 text-red-800"
-            }`}
+            className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800"
           >
             {storageError}
           </p>
@@ -343,7 +333,7 @@ function Dashboard({ stats }) {
         ))}
       </div>
 
-      <PublishTokenCard />
+      <LiveMenuCard />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="rounded-3xl bg-white p-5 shadow-sm">
@@ -444,95 +434,18 @@ function Dashboard({ stats }) {
   );
 }
 
-function PublishTokenCard() {
-  const { setStatus, setStorageError } = useMenuDraft();
-  const [token, setToken] = useState("");
-  const [saved, setSaved] = useState(() => hasPublishToken());
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(
-    saved ? "Live publish is on for this browser. Price saves go to guests without a rebuild." : "",
-  );
-
-  async function onSaveToken(event) {
-    event.preventDefault();
-    setBusy(true);
-    setMessage("");
-    try {
-      const result = await verifyPublishToken(token);
-      if (!result.ok) {
-        setMessage(result.error);
-        return;
-      }
-      savePublishToken(token);
-      setToken("");
-      setSaved(true);
-      setStorageError("");
-      setStatus("GitHub token saved on this phone. Save a dish again and guests will see the new price.");
-      setMessage("Token saved. The next Save publishes straight to the guest menu.");
-    } catch (error) {
-      setMessage(error.message || "The token could not be checked.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function onRemoveToken() {
-    clearPublishToken();
-    setSaved(false);
-    setMessage("Live publish token removed from this browser.");
-  }
-
+function LiveMenuCard() {
   return (
-    <form onSubmit={onSaveToken} className="rounded-3xl bg-white p-5 shadow-sm">
+    <article className="rounded-3xl bg-white p-5 shadow-sm">
       <div className="flex items-center gap-2 text-terracotta">
-        <KeyRound className="h-5 w-5" />
-        <h2 className="font-display text-2xl text-ink">Publish live without rebuilding</h2>
+        <Cloud className="h-5 w-5" />
+        <h2 className="font-display text-2xl text-ink">Live menu</h2>
       </div>
       <p className="mt-2 text-sm text-ink/70">
-        Live prices and photos now save to Firebase. A GitHub token is optional backup. After staff sign-in, Save updates
-        guest phones without rebuilding GitHub Pages.
+        Prices and photos save to Firebase when you click Save. Guest phones pick up those changes. You do not need a
+        GitHub token and you do not rebuild GitHub Pages for small edits.
       </p>
-      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-ink/70">
-        <li>
-          Create a fine-grained token at{" "}
-          <a className="underline" href={GITHUB_TOKEN_HELP_URL} target="_blank" rel="noreferrer">
-            GitHub token settings
-          </a>
-          .
-        </li>
-        <li>
-          Repository access: only <code className="text-ink">{GITHUB_MENU_REPO}</code>.
-        </li>
-        <li>Permissions → Repository → Contents: Read and write.</li>
-      </ol>
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-        <input
-          type="password"
-          value={token}
-          onChange={(event) => setToken(event.target.value)}
-          placeholder={saved ? "Token saved on this browser" : "Paste GitHub token"}
-          className="h-11 flex-1 rounded-xl bg-card-2 px-3"
-          autoComplete="off"
-        />
-        <button
-          type="submit"
-          disabled={busy || !token.trim()}
-          className="inline-flex min-h-11 items-center justify-center rounded-full bg-terracotta px-4 text-sm text-white disabled:opacity-60"
-        >
-          {busy ? "Checking…" : saved ? "Replace token" : "Save token"}
-        </button>
-        {saved ? (
-          <button
-            type="button"
-            onClick={onRemoveToken}
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-card px-4 text-sm"
-          >
-            Remove
-          </button>
-        ) : null}
-      </div>
-      {message ? <p className="mt-3 text-sm text-ink/80">{message}</p> : null}
-    </form>
+    </article>
   );
 }
 
