@@ -6,7 +6,7 @@ export const GITHUB_MENU_PATH = "public/data/menu.json";
 export const GITHUB_TOKEN_HELP_URL = "https://github.com/settings/personal-access-tokens/new";
 
 export const LIVE_PUBLISH_NEEDED =
-  "This live website cannot write files by itself. Paste a GitHub token once on Dashboard, then Save again. After that, guest phones pick up price and photo changes without rebuilding the site.";
+  "The live menu could not be saved. Sign in again, or finish Firebase Auth / Firestore setup, then Save." ;
 
 function githubHeaders(token, extra = {}) {
   return {

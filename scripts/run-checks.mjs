@@ -86,6 +86,10 @@ test("uploaded menu image paths with timestamps are safe", () => {
   assert.equal(isSafeImagePath("draft:screenshot-2026-04-12-162645-mvseckuc.webp"), false);
   assert.equal(isSafeImagePath("data:image/webp;base64,UklGRg=="), true);
   assert.equal(isSafeImagePath("data:text/plain;base64,AAAA"), false);
+  assert.equal(
+    isSafeImagePath("https://firebasestorage.googleapis.com/v0/b/the-maati-cafe.appspot.com/o/menu%2Fphoto.webp?alt=media"),
+    true,
+  );
 });
 
 test("json round trip preserves hindi text", () => {

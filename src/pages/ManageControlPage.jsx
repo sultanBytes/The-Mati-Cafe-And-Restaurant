@@ -489,8 +489,8 @@ function PublishTokenCard() {
         <h2 className="font-display text-2xl text-ink">Publish live without rebuilding</h2>
       </div>
       <p className="mt-2 text-sm text-ink/70">
-        GitHub Pages cannot save files. Paste a token once on this phone. After that, price and photo edits go to every
-        guest phone from GitHub. Photos are compressed to base64. You do not rebuild for small menu changes.
+        Live prices and photos now save to Firebase. A GitHub token is optional backup. After staff sign-in, Save updates
+        guest phones without rebuilding GitHub Pages.
       </p>
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-ink/70">
         <li>
@@ -1002,9 +1002,14 @@ function ItemEditor({ item, onClose }) {
           </label>
         </div>
         {form.image?.startsWith("/images/menu/") && (
-          <p className="mt-1 text-xs text-ink/55">Saved to {form.image}. Guests load it from GitHub without a rebuild.</p>
+          <p className="mt-1 text-xs text-ink/55">Saved to {form.image}.</p>
         )}
-        {(form.image?.startsWith("/images/menu/") || String(form.image || "").startsWith("data:image/")) && (
+        {String(form.image || "").includes("firebasestorage") && (
+          <p className="mt-1 text-xs text-ink/55">Photo stored in Firebase. Guests see it without a rebuild.</p>
+        )}
+        {(form.image?.startsWith("/images/menu/") ||
+          String(form.image || "").startsWith("data:image/") ||
+          String(form.image || "").includes("firebasestorage")) && (
           <button
             type="button"
             className="mt-1 text-sm text-terracotta"

@@ -1,5 +1,6 @@
 import { ALLOWED_IMAGE_TYPES, IMAGE_DB_NAME, IMAGE_STORE_NAME, MAX_DATA_IMAGE_CHARS, MAX_IMAGE_BYTES } from "./constants.js";
 import { slugify } from "./ids.js";
+import { uploadFirebaseImage } from "./firebaseMenu.js";
 import { loadPublishToken, publishRepoFile } from "./liveMenu.js";
 import { isLocalDevHost } from "./urls.js";
 
@@ -147,17 +148,21 @@ export async function uploadMenuImage(file) {
 
   if (isLocalDevHost()) {
     try {
-      return await uploadLocalMenuImage(file);
+      await uploadLocalMenuImage(file);
     } catch {
       /* Live GitHub Pages has no local upload API. */
     }
   }
 
-  const token = loadPublishToken();
-  const compressed = await compressMenuImage(file, {
-    maxBytes: token ? GITHUB_IMAGE_BYTES : EMBEDDED_IMAGE_BYTES,
-  });
+  const compressed = await compressMenuImage(file, { maxBytes: GITHUB_IMAGE_BYTES });
+  try {
+    const firebase = await uploadFirebaseImage(compressed.blob, compressed.filename);
+    if (firebase.ok && firebase.url) return firebase.url;
+  } catch {
+    /* Fall through to GitHub or an embedded photo. */
+  }
 
+  const token = loadPublishToken();
   if (token) {
     try {
       await publishRepoFile({
@@ -166,18 +171,15 @@ export async function uploadMenuImage(file) {
         message: `Add menu photo ${compressed.filename}`,
       });
       return publishedImagePath(compressed.filename);
-    } catch (error) {
-      if (compressed.dataUrl.length <= MAX_DATA_IMAGE_CHARS) {
-        return compressed.dataUrl;
-      }
-      throw error;
+    } catch {
+      /* Fall through to an embedded photo. */
     }
   }
 
   if (compressed.dataUrl.length <= MAX_DATA_IMAGE_CHARS) {
     return compressed.dataUrl;
   }
-  throw new Error("Paste a GitHub token on Dashboard so this photo can publish without a rebuild.");
+  throw new Error("Sign in again so the photo can be saved to Firebase Storage.");
 }
 
 export async function putImageBlob(id, blob, meta = {}) {

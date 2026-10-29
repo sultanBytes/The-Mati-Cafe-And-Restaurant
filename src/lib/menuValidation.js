@@ -9,12 +9,27 @@ export function isDataImageUrl(value) {
   return typeof value === "string" && DATA_IMAGE.test(value);
 }
 
+export function isFirebaseStorageUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return false;
+    return (
+      url.hostname === "firebasestorage.googleapis.com" ||
+      url.hostname.endsWith(".firebasestorage.app") ||
+      url.hostname === "storage.googleapis.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function isSafeImagePath(value) {
   if (!value) return true;
   if (typeof value !== "string") return false;
   if (isDataImageUrl(value)) {
     return value.length <= MAX_DATA_IMAGE_CHARS;
   }
+  if (isFirebaseStorageUrl(value)) return true;
   if (value.startsWith("blob:") || value.startsWith("http://") || value.startsWith("https://")) {
     return false;
   }

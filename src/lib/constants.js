@@ -11,7 +11,7 @@ export const SPICE_LEVELS = ["", "none", "mild", "medium", "hot"];
 export const OWNER_REVIEW_NOTICE =
   "Catalogue prices and availability are initial suggestions and require owner review before launch.";
 export const DRAFT_NOTICE =
-  "Save publishes prices and photos to guest phones without rebuilding the site. On this live website, paste a GitHub token once on Dashboard. Photos are compressed to base64 and published with the live menu. On your computer, npm run dev still writes public/data/menu.json and public/images/menu/.";
+  "Save publishes prices and photos to Firebase. Guest phones read that live data, so GitHub Pages does not need a rebuild. On your computer, npm run dev also writes public/data/menu.json and public/images/menu/.";
 export const ADMIN_SECURITY_NOTICE =
   "Staff sign-in protects this browser session. It is not a full server login.";
 export const RESTAURANT_NAME = "The Maati Cafe & Restaurant";

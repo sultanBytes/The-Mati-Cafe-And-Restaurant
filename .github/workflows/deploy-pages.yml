@@ -27,6 +27,13 @@ jobs:
       - run: npm run build
         env:
           GITHUB_PAGES: "true"
+          VITE_FIREBASE_API_KEY: AIzaSyC3BXSTesF1I0ru_pUNqZWiNXWRF487lpk
+          VITE_FIREBASE_AUTH_DOMAIN: the-maati-cafe.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: the-maati-cafe
+          VITE_FIREBASE_STORAGE_BUCKET: the-maati-cafe.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "303270616378"
+          VITE_FIREBASE_APP_ID: 1:303270616378:web:3cde66f0ee03b3bf680403
+          VITE_FIREBASE_STAFF_EMAIL: maati@themaaticafe.com
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

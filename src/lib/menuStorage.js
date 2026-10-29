@@ -1,5 +1,6 @@
 import { DRAFT_STORAGE_KEY } from "./constants.js";
 import { cloneJson } from "./ids.js";
+import { fetchFirebaseMenu, persistFirebaseMenu } from "./firebaseMenu.js";
 import {
   LIVE_PUBLISH_NEEDED,
   fetchLiveGithubMenu,
@@ -96,6 +97,15 @@ async function tryLocalSave(menu) {
 export async function persistPublishedMenu(menu) {
   menu.revision = `admin-${new Date().toISOString()}`;
 
+  let firebase = null;
+  let firebaseError = null;
+  try {
+    const result = await persistFirebaseMenu(menu);
+    if (result.ok) firebase = result;
+  } catch (error) {
+    firebaseError = error;
+  }
+
   const local = await tryLocalSave(menu);
   if (local.ok && local.payload?.revision) {
     menu.revision = local.payload.revision;
@@ -103,30 +113,31 @@ export async function persistPublishedMenu(menu) {
 
   const token = loadPublishToken();
   let github = null;
-  if (token) {
+  if (token && !firebase) {
     try {
       github = await publishMenuToGitHub(menu, token);
     } catch (error) {
-      if (!local.ok) throw error;
-      return {
-        ok: true,
-        ...local.payload,
-        via: "local",
-        revision: menu.revision,
-        warning: error.message,
-      };
+      if (!local.ok && !firebase) throw error;
     }
   }
 
+  if (firebase) {
+    return {
+      ok: true,
+      via: local.ok ? "local+firebase" : "firebase",
+      revision: menu.revision,
+    };
+  }
   if (local.ok && github) {
     return { ok: true, via: "local+github", revision: menu.revision };
   }
   if (local.ok) {
-    return { ok: true, via: "local", revision: menu.revision, ...local.payload };
+    return { ok: true, via: "local", revision: menu.revision, warning: firebaseError?.message, ...local.payload };
   }
   if (github) {
     return { ok: true, via: "github", revision: menu.revision };
   }
+  if (firebaseError) throw firebaseError;
 
   const error = new Error(LIVE_PUBLISH_NEEDED);
   error.code = "LIVE_PUBLISH_NEEDED";
@@ -143,11 +154,12 @@ async function fetchBundledMenu() {
 
 export async function fetchPublishedMenu() {
   const bundledPromise = fetchBundledMenu().catch(() => null);
+  const firebasePromise = fetchFirebaseMenu();
   const livePromise = import.meta.env.DEV ? Promise.resolve(null) : fetchLiveGithubMenu();
-  const [bundled, live] = await Promise.all([bundledPromise, livePromise]);
+  const [bundled, firebase, live] = await Promise.all([bundledPromise, firebasePromise, livePromise]);
 
-  let data = bundled;
-  if (!import.meta.env.DEV && live && (!bundled || isMenuNewer(live, bundled))) {
+  let data = firebase || bundled;
+  if (!firebase && live && (!bundled || isMenuNewer(live, bundled))) {
     data = live;
   }
   if (!data) {

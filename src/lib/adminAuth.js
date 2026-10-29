@@ -1,3 +1,5 @@
+import { signInFirebaseStaff, signOutFirebaseStaff, updateFirebaseStaffPassword } from "./firebaseMenu.js";
+
 const USERNAME = "maati";
 const DEFAULT_PASSWORD_HASH = "698f009ebe952425662e225de2682bb2dc79709f3efa1a5843c663678781d754";
 const HASH_KEY = "tmc.admin.passwordHash.v1";
@@ -35,6 +37,7 @@ export function signOutAdmin() {
   } catch {
     /* ignore */
   }
+  signOutFirebaseStaff();
 }
 
 export async function signInAdmin(username, password) {
@@ -44,6 +47,10 @@ export async function signInAdmin(username, password) {
   const hash = await sha256Hex(String(password || ""));
   if (hash !== storedHash()) {
     return { ok: false, error: "The ID or password is incorrect." };
+  }
+  const firebase = await signInFirebaseStaff(password);
+  if (!firebase.ok) {
+    return firebase;
   }
   try {
     sessionStorage.setItem(SESSION_KEY, "1");
@@ -68,6 +75,13 @@ export async function changeAdminPassword(currentPassword, nextPassword) {
     localStorage.setItem(HASH_KEY, await sha256Hex(String(nextPassword)));
   } catch {
     return { ok: false, error: "The new password could not be saved on this browser." };
+  }
+  const firebase = await updateFirebaseStaffPassword(nextPassword);
+  if (!firebase.ok) {
+    return {
+      ok: false,
+      error: `Local password updated, but Firebase still uses the old one. ${firebase.error}`,
+    };
   }
   return { ok: true };
 }
