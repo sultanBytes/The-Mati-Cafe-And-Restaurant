@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import MenuView from "../components/menu/MenuView.jsx";
 import { parseTableParam } from "../lib/format.js";
+import { subscribeFirebaseMenu } from "../lib/firebaseMenu.js";
 import { fetchImageSources, fetchPublishedMenu, loadDraftRecord } from "../lib/menuStorage.js";
+import { validateMenu } from "../lib/menuValidation.js";
 
 export default function MenuPage() {
   const [params] = useSearchParams();
@@ -12,6 +14,8 @@ export default function MenuPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let unsub = () => {};
+
     async function load() {
       try {
         const [published, imageSources] = await Promise.all([
@@ -47,6 +51,19 @@ export default function MenuPage() {
           draftUnavailable: false,
           imageSources,
         });
+        unsub = subscribeFirebaseMenu((live) => {
+          if (cancelled || !live) return;
+          const result = validateMenu(live);
+          if (!result.ok) return;
+          setState((current) => ({
+            ...current,
+            status: "ready",
+            menu: live,
+            preview: false,
+            draftUnavailable: false,
+            imageSources: current.imageSources || imageSources,
+          }));
+        });
       } catch (error) {
         if (!cancelled) setState({ status: "error", message: error.message });
       }
@@ -54,6 +71,7 @@ export default function MenuPage() {
     load();
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [wantDraft]);
 

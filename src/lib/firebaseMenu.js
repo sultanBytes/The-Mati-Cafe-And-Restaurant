@@ -1,5 +1,5 @@
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { FIREBASE_STAFF_EMAIL, firebaseAuth, firebaseDb, isFirebaseConfigured } from "./firebase.js";
 
 export const FIRESTORE_MENU_PATH = ["tmc", "liveMenu"];
@@ -98,6 +98,26 @@ export async function fetchFirebaseMenu() {
   } catch {
     return null;
   }
+}
+
+export function subscribeFirebaseMenu(onMenu, onError) {
+  if (!isFirebaseConfigured() || !firebaseDb) return () => {};
+  return onSnapshot(
+    doc(firebaseDb, ...FIRESTORE_MENU_PATH),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onMenu(null);
+        return;
+      }
+      const data = snapshot.data();
+      if (!data || typeof data !== "object" || !Array.isArray(data.items)) {
+        onMenu(null);
+        return;
+      }
+      onMenu(data);
+    },
+    (error) => onError?.(error),
+  );
 }
 
 export async function persistFirebaseMenu(menu) {
