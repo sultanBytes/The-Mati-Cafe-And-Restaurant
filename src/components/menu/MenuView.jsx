@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Leaf, Menu, Search, UtensilsCrossed, X } from "lucide-react";
 import DishImage from "../shared/DishImage.jsx";
 import VegBadge from "../shared/VegBadge.jsx";
-import { INITIAL_VISIBLE_PER_CATEGORY } from "../../lib/constants.js";
+import { RESTAURANT_NAME } from "../../lib/constants.js";
 import { formatItemPrice, formatPrice, hasText, spiceLabel } from "../../lib/format.js";
+import { downloadMenuPdf } from "../../lib/pdfExport.js";
 import {
   getCategoryMap,
   getFeaturedItems,
@@ -25,7 +26,6 @@ export default function MenuView({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [activeId, setActiveId] = useState("");
-  const [expanded, setExpanded] = useState({});
   const [selected, setSelected] = useState(null);
   const searchRef = useRef(null);
   const categoryMap = useMemo(() => getCategoryMap(menu), [menu]);
@@ -64,7 +64,6 @@ export default function MenuView({
   }, [matches, selected]);
 
   function scrollToCategory(id) {
-    setExpanded((current) => ({ ...current, [id]: true }));
     setDrawerOpen(false);
     const node = document.getElementById(`cat-${id}`);
     if (!node) return;
@@ -95,31 +94,13 @@ export default function MenuView({
       )}
 
       <header className="sticky top-0 z-40 border-b border-card bg-ivory/90 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-terracotta">
-              {table ? `Table ${table}` : "Dine-in Menu"}
-            </p>
-            <h1 className="truncate font-display text-[1.35rem] leading-tight text-ink">
-              {restaurant.name || "The Mati Cafe & Restaurant"}
-            </h1>
-          </div>
-          <button
-            type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-card"
-            onClick={focusSearch}
-            aria-label="Search menu"
-          >
-            <Search className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-card"
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Open categories"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+        <div className="mx-auto max-w-3xl px-4 py-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-terracotta">
+            {table ? `Table ${table}` : "Dine-in Menu"}
+          </p>
+          <h1 className="font-display text-[1.4rem] leading-snug text-ink sm:text-2xl">
+            {restaurant.name || RESTAURANT_NAME}
+          </h1>
         </div>
       </header>
 
@@ -134,26 +115,37 @@ export default function MenuView({
           </p>
         </section>
 
-        <div className="relative mt-4">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/40" />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search dishes, Hindi names, tags"
-            aria-label="Search the menu"
-            className="h-12 w-full rounded-2xl border border-transparent bg-white px-10 text-sm shadow-sm"
-          />
-          {query ? (
-            <button
-              type="button"
-              className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full"
-              aria-label="Clear search"
-              onClick={() => setQuery("")}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
+        <div className="mt-4 flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/40" />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search dishes, Hindi names, tags"
+              aria-label="Search the menu"
+              className="h-12 w-full rounded-2xl border border-transparent bg-white px-10 text-sm shadow-sm"
+            />
+            {query ? (
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full"
+                aria-label="Clear search"
+                onClick={() => setQuery("")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-12 shrink-0 items-center gap-2 rounded-2xl bg-terracotta px-4 text-sm font-medium text-white"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open categories"
+          >
+            <Menu className="h-5 w-5" />
+            <span className="hidden sm:inline">Categories</span>
+          </button>
         </div>
 
         <div className="sticky top-[4.6rem] z-30 -mx-4 mt-4 bg-ivory/95 py-2 backdrop-blur">
@@ -211,8 +203,6 @@ export default function MenuView({
         )}
 
         {groups.map(({ category, items }) => {
-          const open = expanded[category.id] || Boolean(query);
-          const visible = open ? items : items.slice(0, INITIAL_VISIBLE_PER_CATEGORY);
           return (
             <section key={category.id} id={`cat-${category.id}`} className="scroll-mt-32 pt-8">
               <div className="flex items-end justify-between gap-3">
@@ -225,7 +215,7 @@ export default function MenuView({
                 <p className="text-xs font-medium text-ink/50">{items.length} items</p>
               </div>
               <ul className="mt-3 divide-y divide-card">
-                {visible.map((item) => (
+                {items.map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"
@@ -265,21 +255,19 @@ export default function MenuView({
                   </li>
                 ))}
               </ul>
-              {!open && items.length > INITIAL_VISIBLE_PER_CATEGORY && (
-                <button
-                  type="button"
-                  className="mt-2 min-h-11 text-sm font-medium text-terracotta"
-                  onClick={() => setExpanded((current) => ({ ...current, [category.id]: true }))}
-                >
-                  Show more ({items.length - INITIAL_VISIBLE_PER_CATEGORY})
-                </button>
-              )}
             </section>
           );
         })}
 
         <footer className="mt-12 border-t border-card py-8 text-sm text-ink/70">
           {hasText(restaurant.footerText) && <p>{restaurant.footerText}</p>}
+          <button
+            type="button"
+            className="mt-4 min-h-11 rounded-full bg-terracotta px-4 text-sm font-medium text-white"
+            onClick={() => downloadMenuPdf(menu)}
+          >
+            Download menu PDF
+          </button>
           {hasText(restaurant.address) && <p className="mt-2">{restaurant.address}</p>}
           {hasText(restaurant.phone) && <p className="mt-1">{restaurant.phone}</p>}
           {hasText(restaurant.openingHours) && <p className="mt-1">{restaurant.openingHours}</p>}
@@ -435,6 +423,19 @@ function DishDialog({ item, category, currency, onClose }) {
             <VegBadge />
           </div>
           {hasText(item.description) && <p className="mt-3 text-sm leading-6 text-ink/80">{item.description}</p>}
+          {item.comboItems?.length ? (
+            <div className="mt-4 rounded-xl bg-veg-soft p-3 text-sm">
+              <p className="font-medium text-veg">Includes</p>
+              <ul className="mt-1 space-y-1 text-ink/80">
+                {item.comboItems.map((entry) => (
+                  <li key={entry.itemId}>
+                    {entry.quantity > 1 ? `${entry.quantity}× ` : ""}
+                    {entry.name || entry.itemId}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {item.variants?.length ? (
             <ul className="mt-4 space-y-2">
               {item.variants.map((variant) => (

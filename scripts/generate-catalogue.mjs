@@ -1596,7 +1596,7 @@ function buildMenu() {
     notice:
       "Catalogue prices and availability are initial suggestions and require owner review before launch.",
     restaurant: {
-      name: "The Mati Cafe & Restaurant",
+      name: "The Maati Cafe & Restaurant",
       currency: "INR",
       description: "Cafe favourites and Indian classics. Scan, browse, and place your order with your server.",
       address: "",

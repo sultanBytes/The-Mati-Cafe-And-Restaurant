@@ -78,7 +78,7 @@ export function groupItemsByCategory(menu, items) {
 
 export function emptyRestaurant() {
   return {
-    name: "The Mati Cafe & Restaurant",
+    name: "The Maati Cafe & Restaurant",
     currency: "INR",
     description: "",
     address: "",

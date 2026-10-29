@@ -86,6 +86,13 @@ export function validateMenu(data) {
         errors.push(`Item ${item.id} must not use a blob URL.`);
       }
     }
+    if (item.comboItems) {
+      push(errors, !Array.isArray(item.comboItems), `Item ${item.id} comboItems must be an array.`);
+      for (const entry of item.comboItems || []) {
+        push(errors, !entry?.itemId, `Item ${item.id} has a combo line without an item id.`);
+        push(errors, !Number.isFinite(Number(entry?.quantity)) || Number(entry.quantity) < 1, `Item ${item.id} has an invalid combo quantity.`);
+      }
+    }
     for (const variant of item.variants || []) {
       push(errors, !variant?.id, `Item ${item.id} has a variant without an id.`);
       push(errors, variantIds.has(variant?.id), `Duplicate variant id: ${variant?.id}`);

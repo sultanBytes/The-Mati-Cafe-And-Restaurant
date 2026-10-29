@@ -1,4 +1,4 @@
-# The Mati Cafe & Restaurant
+# The Maati Cafe & Restaurant
 
 A QR-based informational menu for a vegetarian café and Indian restaurant. Guests scan a table QR code, browse the menu, and place their order with restaurant staff.
 
@@ -82,7 +82,7 @@ Schema version `1`:
   "schemaVersion": 1,
   "revision": "initial",
   "restaurant": {
-    "name": "The Mati Cafe & Restaurant",
+    "name": "The Maati Cafe & Restaurant",
     "currency": "INR",
     "description": "",
     "address": "",

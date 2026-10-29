@@ -50,13 +50,25 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
       if (persisted.revision) validated.revision = persisted.revision;
       setMenu(cloneJson(validated));
       setDirty(false);
-      setStatus(message || "Saved to the project. This stays until you change or remove it.");
-      return { ok: true, persisted: true, menu: validated };
+      if (persisted.warning) {
+        setStorageError(persisted.warning);
+      } else {
+        setStorageError("");
+      }
+      const via = persisted.via || "";
+      const liveMessage =
+        via.includes("github")
+          ? "Published for guests. They will see this on the public menu without a site rebuild. Refresh the guest page after a few seconds."
+          : message || "Saved to the project. This stays until you change or remove it.";
+      setStatus(liveMessage);
+      return { ok: true, persisted: true, via, menu: validated };
     } catch (error) {
       setDirty(true);
       setStatus("");
       setStorageError(
-        `${error.message} The change is kept in this browser until you export menu.json.`,
+        error.code === "LIVE_PUBLISH_NEEDED"
+          ? error.message
+          : `${error.message} The change is kept on this phone until you publish it.`,
       );
       return { ok: true, persisted: false, menu: validated };
     }

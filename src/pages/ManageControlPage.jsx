@@ -1,34 +1,52 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  ChevronDown,
   Copy,
   Download,
   Eye,
   EyeOff,
   FileUp,
   ImagePlus,
+  KeyRound,
+  LogOut,
   Pencil,
   Plus,
+  QrCode,
   Star,
   Trash2,
   Upload,
 } from "lucide-react";
+import AdminLogin from "../components/admin/AdminLogin.jsx";
+import ComboEditor from "../components/admin/ComboEditor.jsx";
 import ConfirmDialog from "../components/shared/ConfirmDialog.jsx";
 import DishImage from "../components/shared/DishImage.jsx";
 import { MenuDraftProvider, useMenuDraft } from "../context/MenuDraftContext.jsx";
+import { changeAdminPassword, isAdminSignedIn, signOutAdmin } from "../lib/adminAuth.js";
 import { ADMIN_PAGE_SIZE, ADMIN_SECURITY_NOTICE, DRAFT_NOTICE, OWNER_REVIEW_NOTICE } from "../lib/constants.js";
 import { formatPrice } from "../lib/format.js";
 import { slugify } from "../lib/ids.js";
 import { uploadMenuImage, validateImageFile } from "../lib/imageStorage.js";
 import { buildPublicationZip, downloadBlob, downloadTextFile, menuToJson } from "../lib/menuExport.js";
+import {
+  GITHUB_MENU_REPO,
+  GITHUB_TOKEN_HELP_URL,
+  clearPublishToken,
+  hasPublishToken,
+  savePublishToken,
+  verifyPublishToken,
+} from "../lib/liveMenu.js";
 import { fetchImageSources, fetchPublishedMenu, loadDraftRecord, parseImportedJson } from "../lib/menuStorage.js";
 import { summarizeMenu, validateMenu } from "../lib/menuValidation.js";
 import { getCategoryMap } from "../lib/menuVisibility.js";
+import { downloadMenuPdf, downloadQrSheetPdf, qrSheetLayout } from "../lib/pdfExport.js";
 
 export default function ManageControlPage() {
+  const [signedIn, setSignedIn] = useState(() => isAdminSignedIn());
   const [boot, setBoot] = useState({ status: "loading" });
 
   useEffect(() => {
+    if (!signedIn) return undefined;
     fetchPublishedMenu()
       .then((published) => {
         const draft = loadDraftRecord();
@@ -50,7 +68,11 @@ export default function ManageControlPage() {
         setBoot({ status: "ready", published });
       })
       .catch((error) => setBoot({ status: "error", message: error.message }));
-  }, []);
+  }, [signedIn]);
+
+  if (!signedIn) {
+    return <AdminLogin onSignedIn={() => setSignedIn(true)} />;
+  }
 
   if (boot.status === "loading") {
     return <div className="flex min-h-screen items-center justify-center bg-ivory">Loading management…</div>;
@@ -65,12 +87,17 @@ export default function ManageControlPage() {
       initialMenu={boot.initialMenu}
       initialDraftSavedAt={boot.initialDraftSavedAt}
     >
-      <AdminShell />
+      <AdminShell
+        onSignOut={() => {
+          signOutAdmin();
+          setSignedIn(false);
+        }}
+      />
     </MenuDraftProvider>
   );
 }
 
-function AdminShell() {
+function AdminShell({ onSignOut }) {
   const { menu, dirty, draftSavedAt, storageError, status, saveDraft } = useMenuDraft();
   const [tab, setTab] = useState("dashboard");
   const stats = summarizeMenu(menu);
@@ -80,12 +107,22 @@ function AdminShell() {
       <header className="border-b border-card bg-ivory/95">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-terracotta">Menu management</p>
-            <h1 className="font-display text-2xl">{menu.restaurant?.name}</h1>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-terracotta">Staff desk</p>
+            <h1 className="font-display text-2xl leading-tight">{menu.restaurant?.name}</h1>
           </div>
-          <Link to="/" className="text-sm font-medium text-terracotta">
-            View public menu
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/" className="inline-flex min-h-11 items-center rounded-full bg-card px-4 text-sm font-medium">
+              View public menu
+            </Link>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-terracotta px-4 text-sm text-white"
+              onClick={onSignOut}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -95,7 +132,15 @@ function AdminShell() {
           <p className="mt-1 text-ink/70">{OWNER_REVIEW_NOTICE}</p>
           <p className="mt-1 text-ink/70">{ADMIN_SECURITY_NOTICE}</p>
         </div>
-        {storageError && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{storageError}</p>}
+        {storageError && (
+          <p
+            className={`mt-3 rounded-xl px-4 py-3 text-sm ${
+              storageError.includes("GitHub token") ? "bg-amber-50 text-amber-950" : "bg-red-50 text-red-800"
+            }`}
+          >
+            {storageError}
+          </p>
+        )}
         {status && <p className="mt-3 text-sm text-veg">{status}</p>}
         <p className="mt-2 text-xs text-ink/50">
           {dirty ? "Unsaved changes in this session." : "No unsaved changes."}
@@ -109,7 +154,6 @@ function AdminShell() {
             ["dashboard", "Dashboard"],
             ["items", "Items"],
             ["categories", "Categories"],
-            ["settings", "Restaurant"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -125,7 +169,6 @@ function AdminShell() {
         {tab === "dashboard" && <Dashboard stats={stats} />}
         {tab === "items" && <ItemManager />}
         {tab === "categories" && <CategoryManager />}
-        {tab === "settings" && <SettingsForm />}
       </div>
     </div>
   );
@@ -235,7 +278,15 @@ function ToolButton({ children, onClick, icon: Icon }) {
 }
 
 function Dashboard({ stats }) {
-  const { menu, dirty, draftSavedAt } = useMenuDraft();
+  const { menu, dirty, draftSavedAt, updateMenu, setStatus, setStorageError } = useMenuDraft();
+  const [qrSize, setQrSize] = useState(6);
+  const [qrBusy, setQrBusy] = useState(false);
+  const [menuBusy, setMenuBusy] = useState(false);
+  const [includeHidden, setIncludeHidden] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [nextPassword, setNextPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const layout = qrSheetLayout(qrSize);
   const cards = [
     ["Total items", stats.items],
     ["Active items", stats.activeItems],
@@ -246,20 +297,247 @@ function Dashboard({ stats }) {
     ["Unsaved changes", dirty ? "Yes" : "No"],
     ["Local draft", draftSavedAt ? "Saved on this browser" : "None"],
   ];
+
+  async function downloadQr() {
+    setQrBusy(true);
+    try {
+      await downloadQrSheetPdf({ sizeCm: qrSize, restaurantName: menu.restaurant?.name });
+      setStatus(`QR sheet downloaded: ${layout.count} codes at ${layout.sizeCm} cm.`);
+    } catch (error) {
+      setStorageError(error.message);
+    } finally {
+      setQrBusy(false);
+    }
+  }
+
+  function downloadMenu() {
+    setMenuBusy(true);
+    try {
+      downloadMenuPdf(menu, { includeHidden });
+      setStatus("A4 double-column menu PDF downloaded.");
+    } catch (error) {
+      setStorageError(error.message);
+    } finally {
+      setMenuBusy(false);
+    }
+  }
+
+  async function onChangePassword(event) {
+    event.preventDefault();
+    const result = await changeAdminPassword(currentPassword, nextPassword);
+    setPasswordMessage(result.ok ? "Password updated on this browser." : result.error);
+    if (result.ok) {
+      setCurrentPassword("");
+      setNextPassword("");
+    }
+  }
+
   return (
-    <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-      {cards.map(([label, value]) => (
-        <article key={label} className="rounded-2xl bg-white p-4 shadow-sm">
-          <p className="text-xs text-ink/55">{label}</p>
-          <p className="mt-1 font-display text-2xl">{value}</p>
+    <section className="mt-6 space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {cards.map(([label, value]) => (
+          <article key={label} className="rounded-2xl bg-white p-4 shadow-sm">
+            <p className="text-xs text-ink/55">{label}</p>
+            <p className="mt-1 font-display text-2xl break-all">{value}</p>
+          </article>
+        ))}
+      </div>
+
+      <PublishTokenCard />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <article className="rounded-3xl bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-terracotta">
+            <QrCode className="h-5 w-5" />
+            <h2 className="font-display text-2xl text-ink">Print table QR codes</h2>
+          </div>
+          <p className="mt-2 text-sm text-ink/70">
+            Choose a square size in centimetres. We fit as many as will sit on one A4 page, then you can print the PDF.
+          </p>
+          <label className="mt-4 block text-sm">
+            <span className="mb-1 block text-ink/65">QR size (cm)</span>
+            <input
+              type="number"
+              min="3"
+              max="12"
+              step="0.5"
+              value={qrSize}
+              onChange={(event) => setQrSize(Number(event.target.value) || 6)}
+              className="h-11 w-full rounded-xl bg-card-2 px-3"
+            />
+          </label>
+          <p className="mt-2 text-sm text-ink/60">
+            {layout.cols} × {layout.rows} = <strong>{layout.count}</strong> codes on one A4 sheet.
+          </p>
+          <button
+            type="button"
+            disabled={qrBusy}
+            onClick={downloadQr}
+            className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-terracotta px-4 text-sm text-white disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            {qrBusy ? "Preparing PDF…" : "Download QR PDF"}
+          </button>
         </article>
-      ))}
+
+        <article className="rounded-3xl bg-white p-5 shadow-sm">
+          <h2 className="font-display text-2xl">Download menu PDF</h2>
+          <p className="mt-2 text-sm text-ink/70">A4 pages, two columns of dishes, ready to print.</p>
+          <label className="mt-4 flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={includeHidden} onChange={(event) => setIncludeHidden(event.target.checked)} />
+            Include hidden / inactive items
+          </label>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={menuBusy}
+              onClick={downloadMenu}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-terracotta px-4 text-sm text-white disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              {menuBusy ? "Preparing PDF…" : "Download menu PDF"}
+            </button>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center rounded-full bg-card px-4 text-sm"
+              onClick={() => {
+                updateMenu((draft) => {
+                  for (const item of draft.items) item.isActive = true;
+                  for (const category of draft.categories) category.isActive = true;
+                });
+                setStatus("All catalogue items and categories are now active. Save to keep this.");
+              }}
+            >
+              Add all items to the public menu
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <form onSubmit={onChangePassword} className="rounded-3xl bg-white p-5 shadow-sm">
+        <h2 className="font-display text-2xl">Change password</h2>
+        <p className="mt-1 text-sm text-ink/65">Enter the current password, then a new one. It is stored on this browser.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            placeholder="Current password"
+            className="h-11 rounded-xl bg-card-2 px-3"
+            required
+          />
+          <input
+            type="password"
+            value={nextPassword}
+            onChange={(event) => setNextPassword(event.target.value)}
+            placeholder="New password (8+ characters)"
+            className="h-11 rounded-xl bg-card-2 px-3"
+            required
+          />
+        </div>
+        {passwordMessage && <p className="mt-3 text-sm text-ink/80">{passwordMessage}</p>}
+        <button type="submit" className="mt-4 min-h-11 rounded-full bg-terracotta px-4 text-sm text-white">
+          Update password
+        </button>
+      </form>
     </section>
   );
 }
 
+function PublishTokenCard() {
+  const { setStatus, setStorageError } = useMenuDraft();
+  const [token, setToken] = useState("");
+  const [saved, setSaved] = useState(() => hasPublishToken());
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(
+    saved ? "Live publish is on for this browser. Price saves go to guests without a rebuild." : "",
+  );
+
+  async function onSaveToken(event) {
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await verifyPublishToken(token);
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      savePublishToken(token);
+      setToken("");
+      setSaved(true);
+      setStorageError("");
+      setStatus("GitHub token saved on this phone. Save a dish again and guests will see the new price.");
+      setMessage("Token saved. The next Save publishes straight to the guest menu.");
+    } catch (error) {
+      setMessage(error.message || "The token could not be checked.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onRemoveToken() {
+    clearPublishToken();
+    setSaved(false);
+    setMessage("Live publish token removed from this browser.");
+  }
+
+  return (
+    <form onSubmit={onSaveToken} className="rounded-3xl bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-2 text-terracotta">
+        <KeyRound className="h-5 w-5" />
+        <h2 className="font-display text-2xl text-ink">Publish live without rebuilding</h2>
+      </div>
+      <p className="mt-2 text-sm text-ink/70">
+        GitHub Pages cannot save files. Paste a token once on this phone. After that, price edits go to every guest
+        phone from GitHub. You do not rebuild or redeploy for small menu changes.
+      </p>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-ink/70">
+        <li>
+          Create a fine-grained token at{" "}
+          <a className="underline" href={GITHUB_TOKEN_HELP_URL} target="_blank" rel="noreferrer">
+            GitHub token settings
+          </a>
+          .
+        </li>
+        <li>
+          Repository access: only <code className="text-ink">{GITHUB_MENU_REPO}</code>.
+        </li>
+        <li>Permissions → Repository → Contents: Read and write.</li>
+      </ol>
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <input
+          type="password"
+          value={token}
+          onChange={(event) => setToken(event.target.value)}
+          placeholder={saved ? "Token saved on this browser" : "Paste GitHub token"}
+          className="h-11 flex-1 rounded-xl bg-card-2 px-3"
+          autoComplete="off"
+        />
+        <button
+          type="submit"
+          disabled={busy || !token.trim()}
+          className="inline-flex min-h-11 items-center justify-center rounded-full bg-terracotta px-4 text-sm text-white disabled:opacity-60"
+        >
+          {busy ? "Checking…" : saved ? "Replace token" : "Save token"}
+        </button>
+        {saved ? (
+          <button
+            type="button"
+            onClick={onRemoveToken}
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-card px-4 text-sm"
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+      {message ? <p className="mt-3 text-sm text-ink/80">{message}</p> : null}
+    </form>
+  );
+}
+
 function ItemManager() {
-  const { menu, updateMenu, makeId } = useMenuDraft();
+  const { menu, updateMenu, commitMenu, makeId } = useMenuDraft();
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -268,6 +546,7 @@ function ItemManager() {
   const [selected, setSelected] = useState(() => new Set());
   const [editing, setEditing] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [comboOpen, setComboOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -380,6 +659,13 @@ function ItemManager() {
           }
         >
           <Plus className="h-4 w-4" /> Add item
+        </button>
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-card px-4 text-sm"
+          onClick={() => setComboOpen(true)}
+        >
+          <Plus className="h-4 w-4" /> Create combo
         </button>
       </div>
 
@@ -509,6 +795,18 @@ function ItemManager() {
       </div>
 
       {editing && <ItemEditor item={editing} onClose={() => setEditing(null)} />}
+      {comboOpen && (
+        <ComboEditor
+          menu={menu}
+          makeId={makeId}
+          onClose={() => setComboOpen(false)}
+          onSave={async (item) => {
+            const next = { ...menu, items: [...menu.items, item] };
+            await commitMenu(next, { message: "Combo saved." });
+            setComboOpen(false);
+          }}
+        />
+      )}
       <ConfirmDialog
         open={Boolean(confirm)}
         title={confirm?.title}
@@ -738,9 +1036,12 @@ function ItemEditor({ item, onClose }) {
 }
 
 function CategoryManager() {
-  const { menu, updateMenu, makeId } = useMenuDraft();
+  const { menu, updateMenu, commitMenu, makeId } = useMenuDraft();
   const [confirm, setConfirm] = useState(null);
   const [form, setForm] = useState({ name: "", description: "" });
+  const [openId, setOpenId] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [comboOpen, setComboOpen] = useState(false);
 
   function addCategory(event) {
     event.preventDefault();
@@ -756,6 +1057,7 @@ function CategoryManager() {
       });
     });
     setForm({ name: "", description: "" });
+    setOpenId(id);
   }
 
   function move(id, direction) {
@@ -772,96 +1074,198 @@ function CategoryManager() {
 
   return (
     <section className="mt-6">
-      <form onSubmit={addCategory} className="grid gap-2 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto]">
-        <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Category name" className="h-11 rounded-xl bg-card-2 px-3" />
-        <input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Description" className="h-11 rounded-xl bg-card-2 px-3" />
-        <button type="submit" className="min-h-11 rounded-full bg-terracotta px-4 text-white">
-          Add category
+      <div className="flex flex-wrap gap-2">
+        <form onSubmit={addCategory} className="grid min-w-[16rem] flex-1 gap-2 rounded-2xl bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto]">
+          <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Category name" className="h-11 rounded-xl bg-card-2 px-3" />
+          <input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Description" className="h-11 rounded-xl bg-card-2 px-3" />
+          <button type="submit" className="min-h-11 rounded-full bg-terracotta px-4 text-white">
+            Add category
+          </button>
+        </form>
+        <button type="button" className="min-h-11 rounded-full bg-card px-4 text-sm" onClick={() => setComboOpen(true)}>
+          Create combo
         </button>
-      </form>
+      </div>
       <ul className="mt-4 space-y-2">
         {menu.categories
           .slice()
           .sort((a, b) => a.sortOrder - b.sortOrder)
           .map((category) => {
-            const count = menu.items.filter((item) => item.categoryId === category.id).length;
+            const items = menu.items.filter((item) => item.categoryId === category.id);
+            const open = openId === category.id;
             return (
-              <li key={category.id} className="rounded-2xl bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <input
-                      value={category.name}
-                      onChange={(event) =>
-                        updateMenu((draft) => {
-                          const target = draft.categories.find((entry) => entry.id === category.id);
-                          if (target) target.name = event.target.value;
-                        })
-                      }
-                      className="font-medium"
-                    />
-                    <textarea
-                      value={category.description}
-                      onChange={(event) =>
-                        updateMenu((draft) => {
-                          const target = draft.categories.find((entry) => entry.id === category.id);
-                          if (target) target.description = event.target.value;
-                        })
-                      }
-                      className="mt-1 block w-full text-sm text-ink/70"
-                    />
-                    <p className="mt-1 text-xs text-ink/50">{count} items in draft</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" className="rounded-full bg-card px-3 py-2 text-sm" onClick={() => move(category.id, -1)}>
-                      Up
-                    </button>
-                    <button type="button" className="rounded-full bg-card px-3 py-2 text-sm" onClick={() => move(category.id, 1)}>
-                      Down
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-full bg-card px-3 py-2 text-sm"
-                      onClick={() =>
-                        updateMenu((draft) => {
-                          const target = draft.categories.find((entry) => entry.id === category.id);
-                          if (target) target.isActive = !target.isActive;
-                        })
-                      }
-                    >
-                      {category.isActive ? "Deactivate" : "Activate"}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-full bg-terracotta px-3 py-2 text-sm text-white"
-                      onClick={() => {
-                        if (count > 0) {
-                          setConfirm({
-                            title: `Cannot delete ${category.name} yet`,
-                            message: "Reassign or delete its items first. Category deactivation already hides them publicly.",
-                            confirmLabel: "OK",
-                            action: () => {},
-                          });
-                          return;
+              <li key={category.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 px-4 py-4 text-left"
+                  onClick={() => setOpenId(open ? "" : category.id)}
+                >
+                  <ChevronDown className={`h-5 w-5 shrink-0 text-terracotta transition ${open ? "rotate-180" : ""}`} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{category.name}</span>
+                    <span className="text-xs text-ink/50">
+                      {items.length} items · {category.isActive ? "Visible" : "Hidden"}
+                    </span>
+                  </span>
+                </button>
+                {open && (
+                  <div className="border-t border-card px-4 pb-4 pt-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input
+                        value={category.name}
+                        onChange={(event) =>
+                          updateMenu((draft) => {
+                            const target = draft.categories.find((entry) => entry.id === category.id);
+                            if (target) target.name = event.target.value;
+                          })
                         }
-                        setConfirm({
-                          title: `Delete ${category.name}?`,
-                          message: "This category will be removed from your draft.",
-                          confirmLabel: "Delete category",
-                          action: () =>
-                            updateMenu((draft) => {
-                              draft.categories = draft.categories.filter((entry) => entry.id !== category.id);
-                            }),
-                        });
-                      }}
-                    >
-                      Delete
-                    </button>
+                        className="h-11 rounded-xl bg-card-2 px-3 font-medium"
+                      />
+                      <textarea
+                        value={category.description}
+                        onChange={(event) =>
+                          updateMenu((draft) => {
+                            const target = draft.categories.find((entry) => entry.id === category.id);
+                            if (target) target.description = event.target.value;
+                          })
+                        }
+                        className="min-h-11 rounded-xl bg-card-2 px-3 py-2 text-sm text-ink/70"
+                      />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" className="rounded-full bg-card px-3 py-2 text-sm" onClick={() => move(category.id, -1)}>
+                        Up
+                      </button>
+                      <button type="button" className="rounded-full bg-card px-3 py-2 text-sm" onClick={() => move(category.id, 1)}>
+                        Down
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full bg-card px-3 py-2 text-sm"
+                        onClick={() =>
+                          updateMenu((draft) => {
+                            const target = draft.categories.find((entry) => entry.id === category.id);
+                            if (target) target.isActive = !target.isActive;
+                          })
+                        }
+                      >
+                        {category.isActive ? "Hide category" : "Show category"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full bg-terracotta px-3 py-2 text-sm text-white"
+                        onClick={() =>
+                          setEditing({
+                            id: "",
+                            name: "",
+                            nameHi: "",
+                            description: "",
+                            categoryId: category.id,
+                            price: 0,
+                            image: "",
+                            tags: [],
+                            spiceLevel: "",
+                            isActive: true,
+                            isFeatured: false,
+                            sortOrder: items.length + 1,
+                            variants: [],
+                          })
+                        }
+                      >
+                        Add item
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full bg-terracotta px-3 py-2 text-sm text-white"
+                        onClick={() => {
+                          if (items.length > 0) {
+                            setConfirm({
+                              title: `Cannot delete ${category.name} yet`,
+                              message: "Reassign or delete its items first.",
+                              confirmLabel: "OK",
+                              action: () => {},
+                            });
+                            return;
+                          }
+                          setConfirm({
+                            title: `Delete ${category.name}?`,
+                            message: "This category will be removed from your draft.",
+                            confirmLabel: "Delete category",
+                            action: () =>
+                              updateMenu((draft) => {
+                                draft.categories = draft.categories.filter((entry) => entry.id !== category.id);
+                              }),
+                          });
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    <ul className="mt-3 divide-y divide-card rounded-xl bg-card-2">
+                      {items.map((item) => (
+                        <li key={item.id} className="flex items-center gap-3 px-3 py-2">
+                          <DishImage item={item} category={category} className="h-10 w-10 rounded-lg" width={40} height={40} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{item.name}</p>
+                            <p className="text-xs text-ink/55">
+                              {formatPrice(item.price, menu.restaurant.currency)} · {item.isActive ? "Active" : "Hidden"}
+                              {item.comboItems?.length ? " · Combo" : ""}
+                            </p>
+                          </div>
+                          <IconButton label="Edit" onClick={() => setEditing(item)}>
+                            <Pencil className="h-4 w-4" />
+                          </IconButton>
+                          <IconButton
+                            label={item.isActive ? "Deactivate" : "Activate"}
+                            onClick={() =>
+                              updateMenu((draft) => {
+                                const target = draft.items.find((entry) => entry.id === item.id);
+                                if (target) target.isActive = !target.isActive;
+                              })
+                            }
+                          >
+                            {item.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </IconButton>
+                          <IconButton
+                            label="Delete"
+                            onClick={() =>
+                              setConfirm({
+                                title: `Delete ${item.name}?`,
+                                message: "This item will be removed from your draft.",
+                                confirmLabel: "Delete Item",
+                                action: () =>
+                                  updateMenu((draft) => {
+                                    draft.items = draft.items.filter((entry) => entry.id !== item.id);
+                                  }),
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </IconButton>
+                        </li>
+                      ))}
+                      {items.length === 0 && <li className="px-3 py-4 text-sm text-ink/55">No items in this category yet.</li>}
+                    </ul>
                   </div>
-                </div>
+                )}
               </li>
             );
           })}
       </ul>
+      {editing && <ItemEditor item={editing} onClose={() => setEditing(null)} />}
+      {comboOpen && (
+        <ComboEditor
+          menu={menu}
+          makeId={makeId}
+          onClose={() => setComboOpen(false)}
+          onSave={async (item) => {
+            const next = { ...menu, items: [...menu.items, item] };
+            await commitMenu(next, { message: "Combo saved." });
+            setComboOpen(false);
+            setOpenId(item.categoryId);
+          }}
+        />
+      )}
       <ConfirmDialog
         open={Boolean(confirm)}
         title={confirm?.title}
@@ -873,74 +1277,6 @@ function CategoryManager() {
           setConfirm(null);
         }}
       />
-    </section>
-  );
-}
-
-function SettingsForm() {
-  const { menu, updateMenu } = useMenuDraft();
-  const restaurant = menu.restaurant;
-
-  function setRestaurant(key, value) {
-    updateMenu((draft) => {
-      draft.restaurant[key] = value;
-    });
-  }
-
-  return (
-    <section className="mt-6 grid gap-3 rounded-2xl bg-white p-5 shadow-sm">
-      <Field label="Restaurant name">
-        <input value={restaurant.name} onChange={(event) => setRestaurant("name", event.target.value)} className="w-full rounded-xl bg-card-2 px-3 py-3" />
-      </Field>
-      <Field label="Description">
-        <textarea value={restaurant.description} onChange={(event) => setRestaurant("description", event.target.value)} className="min-h-24 w-full rounded-xl bg-card-2 px-3 py-3" />
-      </Field>
-      <Field label="Address, hidden publicly if empty">
-        <input value={restaurant.address} onChange={(event) => setRestaurant("address", event.target.value)} className="w-full rounded-xl bg-card-2 px-3 py-3" />
-      </Field>
-      <Field label="Phone, hidden publicly if empty">
-        <input value={restaurant.phone} onChange={(event) => setRestaurant("phone", event.target.value)} className="w-full rounded-xl bg-card-2 px-3 py-3" />
-      </Field>
-      <Field label="Opening hours, hidden publicly if empty">
-        <input value={restaurant.openingHours} onChange={(event) => setRestaurant("openingHours", event.target.value)} className="w-full rounded-xl bg-card-2 px-3 py-3" />
-      </Field>
-      <Field label="Footer text">
-        <textarea value={restaurant.footerText} onChange={(event) => setRestaurant("footerText", event.target.value)} className="min-h-20 w-full rounded-xl bg-card-2 px-3 py-3" />
-      </Field>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={Boolean(restaurant.wifi?.enabled)}
-          onChange={(event) =>
-            updateMenu((draft) => {
-              draft.restaurant.wifi = { ...(draft.restaurant.wifi || {}), enabled: event.target.checked };
-            })
-          }
-        />
-        Show Wi-Fi details publicly
-      </label>
-      <Field label="Wi-Fi name">
-        <input
-          value={restaurant.wifi?.name || ""}
-          onChange={(event) =>
-            updateMenu((draft) => {
-              draft.restaurant.wifi = { ...(draft.restaurant.wifi || { enabled: false, password: "" }), name: event.target.value };
-            })
-          }
-          className="w-full rounded-xl bg-card-2 px-3 py-3"
-        />
-      </Field>
-      <Field label="Wi-Fi password">
-        <input
-          value={restaurant.wifi?.password || ""}
-          onChange={(event) =>
-            updateMenu((draft) => {
-              draft.restaurant.wifi = { ...(draft.restaurant.wifi || { enabled: false, name: "" }), password: event.target.value };
-            })
-          }
-          className="w-full rounded-xl bg-card-2 px-3 py-3"
-        />
-      </Field>
     </section>
   );
 }

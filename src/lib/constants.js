@@ -10,6 +10,7 @@ export const SPICE_LEVELS = ["", "none", "mild", "medium", "hot"];
 export const OWNER_REVIEW_NOTICE =
   "Catalogue prices and availability are initial suggestions and require owner review before launch.";
 export const DRAFT_NOTICE =
-  "Save writes this menu into public/data/menu.json while the local server is running. Uploaded photos stay in public/images/menu/ until you change or remove them.";
+  "Save publishes prices to guest phones without rebuilding the site. On this live website, paste a GitHub token once on Dashboard. On your computer, npm run dev still writes public/data/menu.json. Uploaded photos stay in public/images/menu/ until you change or remove them.";
 export const ADMIN_SECURITY_NOTICE =
-  "This route is an editing utility on a static site. A hidden URL is not secure authentication.";
+  "Staff sign-in protects this browser session. It is not a full server login.";
+export const RESTAURANT_NAME = "The Maati Cafe & Restaurant";
