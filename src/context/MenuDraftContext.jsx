@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { cloneJson, uniqueId } from "../lib/ids.js";
 import { clearDraftRecord, persistPublishedMenu, saveDraftRecord } from "../lib/menuStorage.js";
 import { OWNER_REVIEW_NOTICE } from "../lib/constants.js";
@@ -12,18 +12,21 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
   const [draftSavedAt, setDraftSavedAt] = useState(initialDraftSavedAt || null);
   const [storageError, setStorageError] = useState("");
   const [status, setStatus] = useState("");
+  const menuRef = useRef(menu);
+  const publishQueue = useRef(Promise.resolve());
 
   const replaceMenu = useCallback((next, { dirty: isDirty = true } = {}) => {
-    setMenu(cloneJson(next));
+    const copy = cloneJson(next);
+    menuRef.current = copy;
+    setMenu(copy);
     setDirty(isDirty);
   }, []);
 
   const updateMenu = useCallback((updater) => {
-    setMenu((current) => {
-      const next = cloneJson(current);
-      updater(next);
-      return next;
-    });
+    const next = cloneJson(menuRef.current);
+    updater(next);
+    menuRef.current = next;
+    setMenu(next);
     setDirty(true);
     setStatus("");
   }, []);
@@ -35,6 +38,7 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
       return { ok: false, errors: result.errors };
     }
 
+    menuRef.current = validated;
     setMenu(validated);
 
     const local = saveDraftRecord(validated, { notice: OWNER_REVIEW_NOTICE });
@@ -48,6 +52,7 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
     try {
       const persisted = await persistPublishedMenu(validated);
       if (persisted.revision) validated.revision = persisted.revision;
+      menuRef.current = cloneJson(validated);
       setMenu(cloneJson(validated));
       setDirty(false);
       if (persisted.warning) {
@@ -58,7 +63,7 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
       const via = persisted.via || "";
       const liveMessage =
         via.includes("firebase") || via.includes("github")
-          ? "Published for guests. Prices and photos show on the public menu without a site rebuild. Refresh the guest page after a few seconds."
+          ? "Published for guests. Active, featured, prices, and photos update on the public menu without a rebuild."
           : message || "Saved to the project. This stays until you change or remove it.";
       setStatus(liveMessage);
       return { ok: true, persisted: true, via, menu: validated };
@@ -74,11 +79,33 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
     }
   }, []);
 
-  const saveDraft = useCallback(() => commitMenu(menu), [commitMenu, menu]);
+  const applyAndPublish = useCallback(
+    (updater, options) => {
+      const task = publishQueue.current.then(async () => {
+        const next = cloneJson(menuRef.current);
+        updater(next);
+        menuRef.current = next;
+        setMenu(next);
+        setDirty(true);
+        setStatus("Saving to the live menu…");
+        return commitMenu(next, options);
+      });
+      publishQueue.current = task.then(
+        () => undefined,
+        () => undefined,
+      );
+      return task;
+    },
+    [commitMenu],
+  );
+
+  const saveDraft = useCallback(() => commitMenu(menuRef.current), [commitMenu]);
 
   const discardDraft = useCallback(() => {
     clearDraftRecord();
-    setMenu(cloneJson(published));
+    const restored = cloneJson(published);
+    menuRef.current = restored;
+    setMenu(restored);
     setDirty(false);
     setDraftSavedAt(null);
     setStorageError("");
@@ -106,6 +133,7 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
       setStorageError,
       replaceMenu,
       updateMenu,
+      applyAndPublish,
       commitMenu,
       saveDraft,
       discardDraft,
@@ -120,6 +148,7 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
       status,
       replaceMenu,
       updateMenu,
+      applyAndPublish,
       commitMenu,
       saveDraft,
       discardDraft,

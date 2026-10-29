@@ -276,7 +276,7 @@ function ToolButton({ children, onClick, icon: Icon }) {
 }
 
 function Dashboard({ stats }) {
-  const { menu, dirty, draftSavedAt, updateMenu, setStatus, setStorageError } = useMenuDraft();
+  const { menu, dirty, draftSavedAt, applyAndPublish, setStatus, setStorageError } = useMenuDraft();
   const [qrSize, setQrSize] = useState(6);
   const [qrBusy, setQrBusy] = useState(false);
   const [menuBusy, setMenuBusy] = useState(false);
@@ -399,11 +399,10 @@ function Dashboard({ stats }) {
               type="button"
               className="inline-flex min-h-11 items-center rounded-full bg-card px-4 text-sm"
               onClick={() => {
-                updateMenu((draft) => {
+                applyAndPublish((draft) => {
                   for (const item of draft.items) item.isActive = true;
                   for (const category of draft.categories) category.isActive = true;
                 });
-                setStatus("All catalogue items and categories are now active. Save to keep this.");
               }}
             >
               Add all items to the public menu
@@ -450,15 +449,15 @@ function LiveMenuCard() {
         <h2 className="font-display text-2xl text-ink">Live menu</h2>
       </div>
       <p className="mt-2 text-sm text-ink/70">
-        Prices and photos save to Firebase when you click Save. Guest phones pick up those changes. You do not need a
-        GitHub token and you do not rebuild GitHub Pages for small edits.
+        Active, featured, prices, and photos save to Firebase as soon as you click them. Guest phones pick up those
+        changes. You do not need a GitHub token and you do not rebuild GitHub Pages for small edits.
       </p>
     </article>
   );
 }
 
 function ItemManager() {
-  const { menu, updateMenu, commitMenu, makeId } = useMenuDraft();
+  const { menu, updateMenu, applyAndPublish, commitMenu, makeId } = useMenuDraft();
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -502,9 +501,10 @@ function ItemManager() {
   }
 
   function bulk(active) {
-    updateMenu((draft) => {
+    const ids = new Set(selected);
+    applyAndPublish((draft) => {
       for (const item of draft.items) {
-        if (selected.has(item.id)) item.isActive = active;
+        if (ids.has(item.id)) item.isActive = active;
       }
     });
     setSelected(new Set());
@@ -661,7 +661,7 @@ function ItemManager() {
                     <IconButton
                       label={item.isActive ? "Deactivate" : "Activate"}
                       onClick={() =>
-                        updateMenu((draft) => {
+                        applyAndPublish((draft) => {
                           const target = draft.items.find((entry) => entry.id === item.id);
                           if (target) target.isActive = !target.isActive;
                         })
@@ -672,7 +672,7 @@ function ItemManager() {
                     <IconButton
                       label={item.isFeatured ? "Unmark featured" : "Mark featured"}
                       onClick={() =>
-                        updateMenu((draft) => {
+                        applyAndPublish((draft) => {
                           const target = draft.items.find((entry) => entry.id === item.id);
                           if (target) target.isFeatured = !target.isFeatured;
                         })
@@ -978,7 +978,7 @@ function ItemEditor({ item, onClose }) {
 }
 
 function CategoryManager() {
-  const { menu, updateMenu, commitMenu, makeId } = useMenuDraft();
+  const { menu, updateMenu, applyAndPublish, commitMenu, makeId } = useMenuDraft();
   const [confirm, setConfirm] = useState(null);
   const [form, setForm] = useState({ name: "", description: "" });
   const [openId, setOpenId] = useState("");
@@ -1085,7 +1085,7 @@ function CategoryManager() {
                         type="button"
                         className="rounded-full bg-card px-3 py-2 text-sm"
                         onClick={() =>
-                          updateMenu((draft) => {
+                          applyAndPublish((draft) => {
                             const target = draft.categories.find((entry) => entry.id === category.id);
                             if (target) target.isActive = !target.isActive;
                           })
@@ -1160,7 +1160,7 @@ function CategoryManager() {
                           <IconButton
                             label={item.isActive ? "Deactivate" : "Activate"}
                             onClick={() =>
-                              updateMenu((draft) => {
+                              applyAndPublish((draft) => {
                                 const target = draft.items.find((entry) => entry.id === item.id);
                                 if (target) target.isActive = !target.isActive;
                               })
