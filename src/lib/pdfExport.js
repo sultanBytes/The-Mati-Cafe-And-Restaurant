@@ -1,13 +1,13 @@
 import { jsPDF } from "jspdf";
 import { formatItemPrice } from "./format.js";
 import { getPublicCategories, getPublicItems, groupItemsByCategory } from "./menuVisibility.js";
-import { withBase } from "./urls.js";
+import { publicAssetUrl } from "./urls.js";
 
 const A4_W = 210;
 const A4_H = 297;
 
 async function loadImage(path) {
-  const response = await fetch(withBase(path), { cache: "no-store" });
+  const response = await fetch(publicAssetUrl(path), { cache: "no-store" });
   if (!response.ok) throw new Error("The QR artwork could not be loaded.");
   const blob = await response.blob();
   return new Promise((resolve, reject) => {

@@ -6,7 +6,7 @@ export const GITHUB_MENU_PATH = "public/data/menu.json";
 export const GITHUB_TOKEN_HELP_URL = "https://github.com/settings/personal-access-tokens/new";
 
 export const LIVE_PUBLISH_NEEDED =
-  "This live website cannot write files by itself. Paste a GitHub token once on Dashboard, then Save again. After that, guest phones pick up price changes without rebuilding the site.";
+  "This live website cannot write files by itself. Paste a GitHub token once on Dashboard, then Save again. After that, guest phones pick up price and photo changes without rebuilding the site.";
 
 function githubHeaders(token, extra = {}) {
   return {
@@ -66,8 +66,8 @@ export function isMenuNewer(candidate, baseline, candidateSavedAt) {
   return menuTimestamp(candidate, candidateSavedAt) > menuTimestamp(baseline);
 }
 
-function contentsUrl() {
-  return `https://api.github.com/repos/${GITHUB_MENU_REPO}/contents/${GITHUB_MENU_PATH}`;
+function contentsUrl(repoPath = GITHUB_MENU_PATH) {
+  return `https://api.github.com/repos/${GITHUB_MENU_REPO}/contents/${repoPath}`;
 }
 
 function rawUrl() {
@@ -133,7 +133,13 @@ export async function publishMenuToGitHub(menu, token = loadPublishToken()) {
     throw error;
   }
 
-  const body = `${JSON.stringify(menu, null, 2)}\n`;
+  let body = `${JSON.stringify(menu, null, 2)}\n`;
+  if (new TextEncoder().encode(body).length > 900_000) {
+    body = `${JSON.stringify(menu)}\n`;
+  }
+  if (new TextEncoder().encode(body).length > 1_000_000) {
+    throw new Error("The live menu is too large to publish. Save the GitHub token so photos upload as files instead of embedding base64 in menu.json.");
+  }
   const content = utf8ToBase64(body);
 
   async function put(sha) {
@@ -164,4 +170,36 @@ export async function publishMenuToGitHub(menu, token = loadPublishToken()) {
     via: "github",
     revision: menu.revision,
   };
+}
+
+export async function publishRepoFile({ repoPath, base64, message, token = loadPublishToken() }) {
+  if (!token) {
+    const error = new Error(LIVE_PUBLISH_NEEDED);
+    error.code = "LIVE_PUBLISH_NEEDED";
+    throw error;
+  }
+
+  const url = contentsUrl(repoPath);
+  const current = await fetch(`${url}?ref=${GITHUB_MENU_BRANCH}`, { headers: githubHeaders(token) });
+  let sha;
+  if (current.ok) {
+    sha = (await current.json()).sha;
+  } else if (current.status !== 404) {
+    throw new Error(await readGithubError(current));
+  }
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: githubHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      message,
+      content: base64,
+      branch: GITHUB_MENU_BRANCH,
+      ...(sha ? { sha } : {}),
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(await readGithubError(response));
+  }
+  return { ok: true, repoPath };
 }

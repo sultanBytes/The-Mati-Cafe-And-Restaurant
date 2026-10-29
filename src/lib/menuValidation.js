@@ -1,12 +1,20 @@
-import { SCHEMA_VERSION, SPICE_LEVELS } from "./constants.js";
+import { MAX_DATA_IMAGE_CHARS, SCHEMA_VERSION, SPICE_LEVELS } from "./constants.js";
 
 const MAX_TEXT = 240;
 const MAX_DESC = 600;
 const SAFE_IMAGE = /^\/images\/[A-Za-z0-9._/-]+$/;
+const DATA_IMAGE = /^data:image\/(jpeg|jpg|png|webp|gif);base64,/i;
+
+export function isDataImageUrl(value) {
+  return typeof value === "string" && DATA_IMAGE.test(value);
+}
 
 export function isSafeImagePath(value) {
   if (!value) return true;
   if (typeof value !== "string") return false;
+  if (isDataImageUrl(value)) {
+    return value.length <= MAX_DATA_IMAGE_CHARS;
+  }
   if (value.startsWith("blob:") || value.startsWith("http://") || value.startsWith("https://")) {
     return false;
   }

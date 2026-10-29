@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { draftImageId, getImageRecord, isDraftImageRef, objectUrlFor } from "../../lib/imageStorage.js";
-import { withBase } from "../../lib/urls.js";
+import { publicAssetUrl, withBase } from "../../lib/urls.js";
 
 export default function DishImage({
   item,
@@ -9,11 +9,13 @@ export default function DishImage({
   width = 72,
   height = 72,
 }) {
-  const [src, setSrc] = useState(resolveInitial(item));
+  const [src, setSrc] = useState(() => resolveInitial(item, category));
+  const attempt = useRef(0);
   const alt = item?.name ? `${item.name}` : "Menu item";
 
   useEffect(() => {
     let cancelled = false;
+    attempt.current = 0;
     const path = item?.image;
     if (isDraftImageRef(path)) {
       const id = draftImageId(path);
@@ -29,7 +31,7 @@ export default function DishImage({
         cancelled = true;
       };
     }
-    setSrc(path ? withBase(path) : fallbackFor(item, category));
+    setSrc(path ? publicAssetUrl(path) : fallbackFor(item, category));
     return () => {
       cancelled = true;
     };
@@ -45,6 +47,13 @@ export default function DishImage({
       decoding="async"
       className={`bg-card object-cover ${className}`}
       onError={(event) => {
+        const path = item?.image;
+        if (attempt.current === 0 && path && path.startsWith("/images/")) {
+          attempt.current = 1;
+          event.currentTarget.src = withBase(path);
+          return;
+        }
+        attempt.current = 2;
         event.currentTarget.onerror = null;
         event.currentTarget.src = fallbackFor(item, category);
       }}
@@ -52,11 +61,11 @@ export default function DishImage({
   );
 }
 
-function resolveInitial(item) {
+function resolveInitial(item, category) {
   if (!item?.image || isDraftImageRef(item.image)) {
-    return fallbackFor(item);
+    return fallbackFor(item, category);
   }
-  return withBase(item.image);
+  return publicAssetUrl(item.image);
 }
 
 function fallbackFor(item, category) {

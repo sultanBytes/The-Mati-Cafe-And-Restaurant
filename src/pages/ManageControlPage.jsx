@@ -489,8 +489,8 @@ function PublishTokenCard() {
         <h2 className="font-display text-2xl text-ink">Publish live without rebuilding</h2>
       </div>
       <p className="mt-2 text-sm text-ink/70">
-        GitHub Pages cannot save files. Paste a token once on this phone. After that, price edits go to every guest
-        phone from GitHub. You do not rebuild or redeploy for small menu changes.
+        GitHub Pages cannot save files. Paste a token once on this phone. After that, price and photo edits go to every
+        guest phone from GitHub. Photos are compressed to base64. You do not rebuild for small menu changes.
       </p>
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-ink/70">
         <li>
@@ -914,7 +914,7 @@ function ItemEditor({ item, onClose }) {
     setError("");
     try {
       const committed = await commitMenu(draft, {
-        message: "Item saved. The photo stays until you change or remove it.",
+        message: "Item saved. The photo publishes with the live menu until you change or remove it.",
       });
       if (!committed.ok) {
         setError(committed.errors?.[0] || "The item could not be saved.");
@@ -987,21 +987,28 @@ function ItemEditor({ item, onClose }) {
           />
         </Field>
         <Field label="Image path">
-          <input value={form.image} onChange={(event) => setField("image", event.target.value)} className="field" />
+          {String(form.image || "").startsWith("data:image/") ? (
+            <p className="rounded-xl bg-white px-3 py-3 text-sm text-ink/70">Embedded photo (base64). Guests receive it with the live menu.</p>
+          ) : (
+            <input value={form.image} onChange={(event) => setField("image", event.target.value)} className="field" />
+          )}
         </Field>
-        <label className={`mt-2 inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm ${uploading ? "opacity-60" : ""}`}>
-          <ImagePlus className="h-4 w-4" />
-          {uploading ? "Saving image…" : "Upload image"}
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={onUpload} disabled={uploading} />
-        </label>
+        <div className="mt-2 flex items-center gap-3">
+          <DishImage item={form} width={72} height={72} className="h-16 w-16 rounded-2xl" />
+          <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm ${uploading ? "opacity-60" : ""}`}>
+            <ImagePlus className="h-4 w-4" />
+            {uploading ? "Saving image…" : "Upload image"}
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={onUpload} disabled={uploading} />
+          </label>
+        </div>
         {form.image?.startsWith("/images/menu/") && (
-          <p className="mt-1 text-xs text-ink/55">Saved to {form.image}</p>
+          <p className="mt-1 text-xs text-ink/55">Saved to {form.image}. Guests load it from GitHub without a rebuild.</p>
         )}
-        {form.image?.startsWith("/images/menu/") && (
+        {(form.image?.startsWith("/images/menu/") || String(form.image || "").startsWith("data:image/")) && (
           <button
             type="button"
             className="mt-1 text-sm text-terracotta"
-            onClick={() => setField("image", `/images/fallbacks/${form.categoryId}.webp`)}
+            onClick={() => setField("image", `/images/fallbacks/${form.categoryId}.svg`)}
           >
             Remove uploaded image
           </button>

@@ -84,6 +84,8 @@ test("uploaded menu image paths with timestamps are safe", () => {
   assert.equal(isSafeImagePath("/images/menu/screenshot-20261028-230812.webp"), true);
   assert.equal(isSafeImagePath("/images/menu/bread-butter-20261028-230812-1.webp"), true);
   assert.equal(isSafeImagePath("draft:screenshot-2026-04-12-162645-mvseckuc.webp"), false);
+  assert.equal(isSafeImagePath("data:image/webp;base64,UklGRg=="), true);
+  assert.equal(isSafeImagePath("data:text/plain;base64,AAAA"), false);
 });
 
 test("json round trip preserves hindi text", () => {

@@ -8,7 +8,7 @@ import {
   publishMenuToGitHub,
 } from "./liveMenu.js";
 import { validateMenu } from "./menuValidation.js";
-import { withBase } from "./urls.js";
+import { isLocalDevHost, withBase } from "./urls.js";
 
 export function loadDraftRecord() {
   try {
@@ -66,9 +66,7 @@ export function parseImportedJson(text) {
 }
 
 function shouldTryLocalSave() {
-  if (typeof window === "undefined") return true;
-  const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1";
+  return isLocalDevHost();
 }
 
 async function tryLocalSave(menu) {

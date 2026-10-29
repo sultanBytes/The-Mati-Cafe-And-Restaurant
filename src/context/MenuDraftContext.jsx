@@ -58,7 +58,7 @@ export function MenuDraftProvider({ published, initialMenu, initialDraftSavedAt,
       const via = persisted.via || "";
       const liveMessage =
         via.includes("github")
-          ? "Published for guests. They will see this on the public menu without a site rebuild. Refresh the guest page after a few seconds."
+          ? "Published for guests. Prices and photos show on the public menu without a site rebuild. Refresh the guest page after a few seconds."
           : message || "Saved to the project. This stays until you change or remove it.";
       setStatus(liveMessage);
       return { ok: true, persisted: true, via, menu: validated };
