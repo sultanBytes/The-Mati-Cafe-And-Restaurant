@@ -30,6 +30,7 @@ Live site (GitHub Pages): https://sultanbytes.github.io/The-Mati-Cafe-And-Restau
 | `npm run generate:fallbacks` | Create illustrated category fallback images |
 | `npm run download:images` | Download permitted Wikimedia photos for active dishes |
 | `npm run download:fonts` | Copy OFL font files into `public/fonts/` |
+| `npm run convert:menu-images` | Convert HEIC cafe photos in `scripts/source-images/` to `public/menu-themes/` JPGs |
 | `npm run validate:menu` | Validate schema, ids, visibility and local image paths |
 | `npm run check` | Automated data and logic checks |
 
@@ -181,9 +182,23 @@ Do not hotlink remote images at runtime. Do not commit API keys.
 
 Re-run `npm run download:images` during development if you need to resume downloads. The script uses limited concurrency, timeouts, retries, file-type checks and `scripts/.image-cache.json`.
 
+## Themed menu PDF
+
+Staff can download a print menu from `/manage-control/tmc` → **Download menu PDF**. That dialog is behind the existing staff sign-in. It includes only active items in active categories, grouped in the current category and item order.
+
+GitHub Pages cannot run headless Chrome, so the PDF is generated in the staff browser from the same HTML/CSS template as the live preview (html2canvas + jsPDF). Backgrounds, fonts and photos are embedded as data URLs before capture.
+
+### Adding a theme
+
+1. Add one object to `MENU_THEMES` in `src/lib/menuThemes.js` (id, name, colours, heading/body fonts, pattern, hero, watermark, gallery photos).
+2. Put any new photos in `public/menu-themes/` as optimized JPGs (see `npm run convert:menu-images`).
+3. If the theme needs a new font, add the `@fontsource` package, copy the woff2 in `scripts/download-fonts.mjs`, and list it in `src/lib/menuPdfAssets.js`.
+
+The preview and the downloaded file both call `buildMenuPdfDocument` in `src/lib/menuPdfTemplate.js`, so they stay in sync.
+
 ## Fonts
 
-Playfair Display and DM Sans are SIL Open Font License fonts, bundled from `@fontsource` into the Vite build and copied to `public/fonts/`. Fallbacks are Georgia / Times New Roman and system UI sans-serif.
+Playfair Display, Rozha One, Yatra One, Cormorant Garamond, Lato, Poppins and DM Sans are SIL Open Font License fonts, bundled from `@fontsource` into the Vite build and copied to `public/fonts/`. Fallbacks are Georgia / Times New Roman and system UI sans-serif.
 
 ## What this project does not do
 

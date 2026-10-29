@@ -1,5 +1,9 @@
+import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { formatItemPrice } from "./format.js";
+import { loadItemImages, loadMenuPdfFonts, loadThemePhotos } from "./menuPdfAssets.js";
+import { A4_HEIGHT_PX, A4_WIDTH_PX, buildMenuPdfDocument } from "./menuPdfTemplate.js";
+import { getMenuTheme } from "./menuThemes.js";
 import { getPublicCategories, getPublicItems, groupItemsByCategory } from "./menuVisibility.js";
 import { publicAssetUrl } from "./urls.js";
 
@@ -87,7 +91,7 @@ export function downloadMenuPdf(menu, { includeHidden = false } = {}) {
     pdf.text(restaurant.name || "The Maati Cafe & Restaurant", margin, 10);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
-    pdf.text("Vegetarian cafe menu · prices in INR", A4_W - margin, 10, { align: "right" });
+    pdf.text("Vegetarian cafe menu", A4_W - margin, 10, { align: "right" });
   }
 
   function footer() {
@@ -166,4 +170,69 @@ export function downloadMenuPdf(menu, { includeHidden = false } = {}) {
   }
 
   pdf.save("maati-menu.pdf");
+}
+
+function todayStamp() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+async function waitForPdfReady(root) {
+  const images = [...root.querySelectorAll("img")];
+  await Promise.all(
+    images.map((image) => {
+      if (image.complete) return Promise.resolve();
+      return new Promise((resolve) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", resolve, { once: true });
+      });
+    }),
+  );
+  if (document.fonts?.ready) await document.fonts.ready;
+}
+
+export async function prepareThemedMenuPdf(menu, themeId) {
+  const theme = getMenuTheme(themeId);
+  const [fonts, photos, itemImages] = await Promise.all([
+    loadMenuPdfFonts(),
+    loadThemePhotos(theme),
+    loadItemImages(getPublicItems(menu)),
+  ]);
+  const documentModel = buildMenuPdfDocument(menu, theme, { fonts, photos, itemImages });
+  return { theme, ...documentModel };
+}
+
+export async function downloadThemedMenuPdf(menu, themeId) {
+  const prepared = await prepareThemedMenuPdf(menu, themeId);
+  const host = document.createElement("div");
+  host.setAttribute("data-menu-pdf-host", "true");
+  host.setAttribute("aria-hidden", "true");
+  host.style.cssText = `position:fixed;left:0;top:0;width:${A4_WIDTH_PX}px;z-index:-1;opacity:0.01;pointer-events:none;`;
+  host.innerHTML = `<style>${prepared.css}</style>${prepared.body}`;
+  document.body.appendChild(host);
+  try {
+    await waitForPdfReady(host);
+    const pages = [...host.querySelectorAll(".pdf-page")];
+    if (!pages.length) throw new Error("The menu PDF could not be laid out.");
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    for (let index = 0; index < pages.length; index += 1) {
+      const canvas = await html2canvas(pages[index], {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: prepared.theme.bg,
+        width: A4_WIDTH_PX,
+        height: A4_HEIGHT_PX,
+        windowWidth: A4_WIDTH_PX,
+        windowHeight: A4_HEIGHT_PX,
+      });
+      const image = canvas.toDataURL("image/jpeg", 0.92);
+      if (index > 0) pdf.addPage();
+      pdf.addImage(image, "JPEG", 0, 0, A4_W, A4_H, undefined, "FAST");
+    }
+    pdf.save(`maati-menu-${prepared.theme.id}-${todayStamp()}.pdf`);
+    return prepared;
+  } finally {
+    host.remove();
+  }
 }

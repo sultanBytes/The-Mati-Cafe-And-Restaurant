@@ -11,14 +11,21 @@
     "generate:fallbacks": "node scripts/generate-fallbacks.mjs",
     "download:images": "node scripts/download-images.mjs",
     "download:fonts": "node scripts/download-fonts.mjs",
+    "convert:menu-images": "node scripts/convert-menu-images.js",
     "validate:menu": "node scripts/validate-menu.mjs",
     "check": "node scripts/run-checks.mjs",
     "test": "node --test scripts/run-checks.mjs"
   },
   "dependencies": {
+    "@fontsource/cormorant-garamond": "^5.2.5",
     "@fontsource/dm-sans": "^5.2.5",
+    "@fontsource/lato": "^5.2.5",
     "@fontsource/playfair-display": "^5.2.5",
+    "@fontsource/poppins": "^5.2.5",
+    "@fontsource/rozha-one": "^5.2.5",
+    "@fontsource/yatra-one": "^5.2.5",
     "firebase": "^12.19.0",
+    "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.544.0",
@@ -29,6 +36,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",
     "@vitejs/plugin-react": "^5.0.2",
+    "heic-convert": "^2.1.0",
     "sharp": "^0.34.3",
     "tailwindcss": "^4.1.13",
     "vite": "^7.1.5"

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import AdminLogin from "../components/admin/AdminLogin.jsx";
 import ComboEditor from "../components/admin/ComboEditor.jsx";
+import MenuPdfDialog from "../components/admin/MenuPdfDialog.jsx";
 import ConfirmDialog from "../components/shared/ConfirmDialog.jsx";
 import DishImage from "../components/shared/DishImage.jsx";
 import { MenuDraftProvider, useMenuDraft } from "../context/MenuDraftContext.jsx";
@@ -31,7 +32,7 @@ import { buildPublicationZip, downloadBlob, downloadTextFile, menuToJson } from 
 import { fetchImageSources, fetchPublishedMenu, loadDraftRecord, parseImportedJson } from "../lib/menuStorage.js";
 import { summarizeMenu, validateMenu } from "../lib/menuValidation.js";
 import { getCategoryMap } from "../lib/menuVisibility.js";
-import { downloadMenuPdf, downloadQrSheetPdf, qrSheetLayout } from "../lib/pdfExport.js";
+import { downloadQrSheetPdf, qrSheetLayout } from "../lib/pdfExport.js";
 
 export default function ManageControlPage() {
   const [signedIn, setSignedIn] = useState(null);
@@ -279,8 +280,7 @@ function Dashboard({ stats }) {
   const { menu, dirty, draftSavedAt, applyAndPublish, setStatus, setStorageError } = useMenuDraft();
   const [qrSize, setQrSize] = useState(6);
   const [qrBusy, setQrBusy] = useState(false);
-  const [menuBusy, setMenuBusy] = useState(false);
-  const [includeHidden, setIncludeHidden] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
@@ -305,18 +305,6 @@ function Dashboard({ stats }) {
       setStorageError(error.message);
     } finally {
       setQrBusy(false);
-    }
-  }
-
-  function downloadMenu() {
-    setMenuBusy(true);
-    try {
-      downloadMenuPdf(menu, { includeHidden });
-      setStatus("A4 double-column menu PDF downloaded.");
-    } catch (error) {
-      setStorageError(error.message);
-    } finally {
-      setMenuBusy(false);
     }
   }
 
@@ -380,24 +368,21 @@ function Dashboard({ stats }) {
 
         <article className="rounded-3xl bg-white p-5 shadow-sm">
           <h2 className="font-display text-2xl">Download menu PDF</h2>
-          <p className="mt-2 text-sm text-ink/70">A4 pages, two columns of dishes, ready to print.</p>
-          <label className="mt-4 flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={includeHidden} onChange={(event) => setIncludeHidden(event.target.checked)} />
-            Include hidden / inactive items
-          </label>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <p className="mt-2 text-sm text-ink/70">
+            Choose a cafe theme, preview the A4 pages, then download. Only active dishes are included.
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
-              disabled={menuBusy}
-              onClick={downloadMenu}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-terracotta px-4 text-sm text-white disabled:opacity-60"
+              onClick={() => setPdfOpen(true)}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-terracotta px-4 text-sm text-white sm:w-auto"
             >
               <Download className="h-4 w-4" />
-              {menuBusy ? "Preparing PDF…" : "Download menu PDF"}
+              Download menu PDF
             </button>
             <button
               type="button"
-              className="inline-flex min-h-11 items-center rounded-full bg-card px-4 text-sm"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-card px-4 text-sm sm:w-auto"
               onClick={() => {
                 applyAndPublish((draft) => {
                   for (const item of draft.items) item.isActive = true;
@@ -437,6 +422,7 @@ function Dashboard({ stats }) {
           Update password
         </button>
       </form>
+      {pdfOpen && <MenuPdfDialog menu={menu} onClose={() => setPdfOpen(false)} />}
     </section>
   );
 }

@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 scripts/.image-cache.json
+scripts/source-images/
 .DS_Store
 
 # Editor directories and files
