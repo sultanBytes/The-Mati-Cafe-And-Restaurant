@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { fetchFirebaseImage, isFirestoreImageRef } from "../../lib/firebaseMenu.js";
 import { draftImageId, getImageRecord, isDraftImageRef, objectUrlFor } from "../../lib/imageStorage.js";
 import { publicAssetUrl, withBase } from "../../lib/urls.js";
 
@@ -23,6 +24,19 @@ export default function DishImage({
         .then((record) => {
           if (cancelled || !record?.blob) return;
           setSrc(objectUrlFor(id, record.blob));
+        })
+        .catch(() => {
+          if (!cancelled) setSrc(fallbackFor(item, category));
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (isFirestoreImageRef(path)) {
+      fetchFirebaseImage(path)
+        .then((dataUrl) => {
+          if (cancelled) return;
+          setSrc(dataUrl || fallbackFor(item, category));
         })
         .catch(() => {
           if (!cancelled) setSrc(fallbackFor(item, category));
@@ -62,7 +76,7 @@ export default function DishImage({
 }
 
 function resolveInitial(item, category) {
-  if (!item?.image || isDraftImageRef(item.image)) {
+  if (!item?.image || isDraftImageRef(item.image) || isFirestoreImageRef(item.image)) {
     return fallbackFor(item, category);
   }
   return publicAssetUrl(item.image);

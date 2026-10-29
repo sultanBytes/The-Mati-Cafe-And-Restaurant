@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { getAllImageRecords, isDraftImageRef, draftImageId } from "./imageStorage.js";
+import { fetchFirebaseImage, isFirestoreImageRef } from "./firebaseMenu.js";
 import { isDataImageUrl } from "./menuValidation.js";
 import { publicAssetUrl, withBase } from "./urls.js";
 
@@ -46,6 +47,10 @@ function dataUrlToBlob(dataUrl) {
 async function fetchPublicAsset(path) {
   if (isDataImageUrl(path)) {
     return dataUrlToBlob(path);
+  }
+  if (isFirestoreImageRef(path)) {
+    const dataUrl = await fetchFirebaseImage(path);
+    return dataUrl ? dataUrlToBlob(dataUrl) : null;
   }
   for (const url of [publicAssetUrl(path), withBase(path)]) {
     try {

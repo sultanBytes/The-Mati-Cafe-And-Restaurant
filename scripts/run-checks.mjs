@@ -90,6 +90,7 @@ test("uploaded menu image paths with timestamps are safe", () => {
     isSafeImagePath("https://firebasestorage.googleapis.com/v0/b/the-maati-cafe.appspot.com/o/menu%2Fphoto.webp?alt=media"),
     true,
   );
+  assert.equal(isSafeImagePath("fbimg:bread-butter-20261029-141000"), true);
 });
 
 test("json round trip preserves hindi text", () => {

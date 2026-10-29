@@ -987,8 +987,12 @@ function ItemEditor({ item, onClose }) {
           />
         </Field>
         <Field label="Image path">
-          {String(form.image || "").startsWith("data:image/") ? (
-            <p className="rounded-xl bg-white px-3 py-3 text-sm text-ink/70">Embedded photo (base64). Guests receive it with the live menu.</p>
+          {String(form.image || "").startsWith("data:image/") || String(form.image || "").startsWith("fbimg:") ? (
+            <p className="rounded-xl bg-white px-3 py-3 text-sm text-ink/70">
+              {String(form.image || "").startsWith("fbimg:")
+                ? "Photo saved in the live database as compressed base64."
+                : "Embedded photo (base64). Guests receive it with the live menu."}
+            </p>
           ) : (
             <input value={form.image} onChange={(event) => setField("image", event.target.value)} className="field" />
           )}
@@ -1004,11 +1008,12 @@ function ItemEditor({ item, onClose }) {
         {form.image?.startsWith("/images/menu/") && (
           <p className="mt-1 text-xs text-ink/55">Saved to {form.image}.</p>
         )}
-        {String(form.image || "").includes("firebasestorage") && (
-          <p className="mt-1 text-xs text-ink/55">Photo stored in Firebase. Guests see it without a rebuild.</p>
+        {String(form.image || "").startsWith("fbimg:") && (
+          <p className="mt-1 text-xs text-ink/55">Photo stored in Firebase as base64. Guests see it without a rebuild.</p>
         )}
         {(form.image?.startsWith("/images/menu/") ||
           String(form.image || "").startsWith("data:image/") ||
+          String(form.image || "").startsWith("fbimg:") ||
           String(form.image || "").includes("firebasestorage")) && (
           <button
             type="button"

@@ -1,15 +1,11 @@
 import { signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import {
-  FIREBASE_STAFF_EMAIL,
-  firebaseAuth,
-  firebaseDb,
-  firebaseStorage,
-  isFirebaseConfigured,
-} from "./firebase.js";
+import { FIREBASE_STAFF_EMAIL, firebaseAuth, firebaseDb, isFirebaseConfigured } from "./firebase.js";
 
 export const FIRESTORE_MENU_PATH = ["tmc", "liveMenu"];
+export const FIRESTORE_IMAGE_PREFIX = "fbimg:";
+
+const imageCache = new Map();
 
 function requireAuth() {
   const user = firebaseAuth?.currentUser;
@@ -21,6 +17,14 @@ function requireAuth() {
 
 function toFirestoreMenu(menu) {
   return JSON.parse(JSON.stringify(menu));
+}
+
+export function isFirestoreImageRef(value) {
+  return typeof value === "string" && value.startsWith(FIRESTORE_IMAGE_PREFIX);
+}
+
+export function firestoreImageId(value) {
+  return isFirestoreImageRef(value) ? value.slice(FIRESTORE_IMAGE_PREFIX.length) : null;
 }
 
 export async function signInFirebaseStaff(password) {
@@ -90,13 +94,34 @@ export async function persistFirebaseMenu(menu) {
   return { ok: true, via: "firebase", revision: menu.revision };
 }
 
-export async function uploadFirebaseImage(file, filename) {
-  if (!isFirebaseConfigured() || !firebaseStorage) {
+export async function saveFirebaseImageDataUrl(filename, dataUrl) {
+  if (!isFirebaseConfigured() || !firebaseDb) {
     return { ok: false, skipped: true };
   }
   requireAuth();
-  const storageRef = ref(firebaseStorage, `menu/${filename}`);
-  await uploadBytes(storageRef, file, { contentType: file.type || "image/webp" });
-  const url = await getDownloadURL(storageRef);
-  return { ok: true, url };
+  const id = String(filename || "photo")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^A-Za-z0-9._-]/g, "-")
+    .slice(0, 80) || "photo";
+  await setDoc(doc(firebaseDb, "tmcImages", id), {
+    dataUrl,
+    filename,
+    updatedAt: new Date().toISOString(),
+  });
+  imageCache.set(id, dataUrl);
+  return { ok: true, ref: `${FIRESTORE_IMAGE_PREFIX}${id}` };
+}
+
+export async function fetchFirebaseImage(refValue) {
+  const id = firestoreImageId(refValue);
+  if (!id || !firebaseDb) return null;
+  if (imageCache.has(id)) return imageCache.get(id);
+  try {
+    const snapshot = await getDoc(doc(firebaseDb, "tmcImages", id));
+    const dataUrl = snapshot.exists() ? snapshot.data()?.dataUrl : null;
+    if (dataUrl) imageCache.set(id, dataUrl);
+    return dataUrl || null;
+  } catch {
+    return null;
+  }
 }

@@ -4,6 +4,7 @@ const MAX_TEXT = 240;
 const MAX_DESC = 600;
 const SAFE_IMAGE = /^\/images\/[A-Za-z0-9._/-]+$/;
 const DATA_IMAGE = /^data:image\/(jpeg|jpg|png|webp|gif);base64,/i;
+const FIRESTORE_IMAGE = /^fbimg:[A-Za-z0-9._-]+$/;
 
 export function isDataImageUrl(value) {
   return typeof value === "string" && DATA_IMAGE.test(value);
@@ -29,6 +30,7 @@ export function isSafeImagePath(value) {
   if (isDataImageUrl(value)) {
     return value.length <= MAX_DATA_IMAGE_CHARS;
   }
+  if (FIRESTORE_IMAGE.test(value)) return true;
   if (isFirebaseStorageUrl(value)) return true;
   if (value.startsWith("blob:") || value.startsWith("http://") || value.startsWith("https://")) {
     return false;

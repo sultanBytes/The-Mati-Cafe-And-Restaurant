@@ -1,11 +1,12 @@
 import { ALLOWED_IMAGE_TYPES, IMAGE_DB_NAME, IMAGE_STORE_NAME, MAX_DATA_IMAGE_CHARS, MAX_IMAGE_BYTES } from "./constants.js";
 import { slugify } from "./ids.js";
-import { uploadFirebaseImage } from "./firebaseMenu.js";
+import { saveFirebaseImageDataUrl } from "./firebaseMenu.js";
 import { loadPublishToken, publishRepoFile } from "./liveMenu.js";
 import { isLocalDevHost } from "./urls.js";
 
 const MAX_IMAGE_EDGE = 1200;
 const GITHUB_IMAGE_BYTES = 420 * 1024;
+const FIRESTORE_IMAGE_BYTES = 160 * 1024;
 const EMBEDDED_IMAGE_BYTES = 72 * 1024;
 
 let dbPromise;
@@ -154,10 +155,10 @@ export async function uploadMenuImage(file) {
     }
   }
 
-  const compressed = await compressMenuImage(file, { maxBytes: GITHUB_IMAGE_BYTES });
+  const compressed = await compressMenuImage(file, { maxBytes: FIRESTORE_IMAGE_BYTES });
   try {
-    const firebase = await uploadFirebaseImage(compressed.blob, compressed.filename);
-    if (firebase.ok && firebase.url) return firebase.url;
+    const firebase = await saveFirebaseImageDataUrl(compressed.filename, compressed.dataUrl);
+    if (firebase.ok && firebase.ref) return firebase.ref;
   } catch {
     /* Fall through to GitHub or an embedded photo. */
   }
@@ -179,7 +180,7 @@ export async function uploadMenuImage(file) {
   if (compressed.dataUrl.length <= MAX_DATA_IMAGE_CHARS) {
     return compressed.dataUrl;
   }
-  throw new Error("Sign in again so the photo can be saved to Firebase Storage.");
+  throw new Error("Sign in again so the photo can be saved to Firebase.");
 }
 
 export async function putImageBlob(id, blob, meta = {}) {
