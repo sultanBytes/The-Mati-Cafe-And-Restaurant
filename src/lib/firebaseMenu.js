@@ -1,4 +1,4 @@
-import { signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { FIREBASE_STAFF_EMAIL, firebaseAuth, firebaseDb, isFirebaseConfigured } from "./firebase.js";
 
@@ -7,8 +7,24 @@ export const FIRESTORE_IMAGE_PREFIX = "fbimg:";
 
 const imageCache = new Map();
 
-function requireAuth() {
-  const user = firebaseAuth?.currentUser;
+export function waitForFirebaseAuth(timeoutMs = 8000) {
+  if (!firebaseAuth) return Promise.resolve(null);
+  if (firebaseAuth.currentUser) return Promise.resolve(firebaseAuth.currentUser);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      unsub();
+      resolve(firebaseAuth.currentUser);
+    }, timeoutMs);
+    const unsub = onAuthStateChanged(firebaseAuth, (user) => {
+      clearTimeout(timer);
+      unsub();
+      resolve(user);
+    });
+  });
+}
+
+async function requireAuth() {
+  const user = await waitForFirebaseAuth();
   if (!user) {
     throw new Error("Sign in again so the live menu can be saved to Firebase.");
   }
@@ -88,7 +104,7 @@ export async function persistFirebaseMenu(menu) {
   if (!isFirebaseConfigured() || !firebaseDb) {
     return { ok: false, skipped: true };
   }
-  requireAuth();
+  await requireAuth();
   const payload = toFirestoreMenu(menu);
   await setDoc(doc(firebaseDb, ...FIRESTORE_MENU_PATH), payload);
   return { ok: true, via: "firebase", revision: menu.revision };
@@ -98,7 +114,7 @@ export async function saveFirebaseImageDataUrl(filename, dataUrl) {
   if (!isFirebaseConfigured() || !firebaseDb) {
     return { ok: false, skipped: true };
   }
-  requireAuth();
+  await requireAuth();
   const id = String(filename || "photo")
     .replace(/\.[^.]+$/, "")
     .replace(/[^A-Za-z0-9._-]/g, "-")

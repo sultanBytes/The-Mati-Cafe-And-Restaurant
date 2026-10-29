@@ -1,5 +1,6 @@
 import { DRAFT_STORAGE_KEY } from "./constants.js";
 import { cloneJson } from "./ids.js";
+import { isFirebaseConfigured } from "./firebase.js";
 import { fetchFirebaseMenu, persistFirebaseMenu } from "./firebaseMenu.js";
 import {
   LIVE_PUBLISH_NEEDED,
@@ -121,6 +122,10 @@ export async function persistPublishedMenu(menu) {
     }
   }
 
+  if (isFirebaseConfigured() && !firebase) {
+    throw firebaseError || new Error("The live menu could not be saved to Firebase.");
+  }
+
   if (firebase) {
     return {
       ok: true,
@@ -132,7 +137,7 @@ export async function persistPublishedMenu(menu) {
     return { ok: true, via: "local+github", revision: menu.revision };
   }
   if (local.ok) {
-    return { ok: true, via: "local", revision: menu.revision, warning: firebaseError?.message, ...local.payload };
+    return { ok: true, via: "local", revision: menu.revision, ...local.payload };
   }
   if (github) {
     return { ok: true, via: "github", revision: menu.revision };

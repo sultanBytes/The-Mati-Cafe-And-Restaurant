@@ -1,4 +1,5 @@
-import { signInFirebaseStaff, signOutFirebaseStaff, updateFirebaseStaffPassword } from "./firebaseMenu.js";
+import { isFirebaseConfigured } from "./firebase.js";
+import { signInFirebaseStaff, signOutFirebaseStaff, updateFirebaseStaffPassword, waitForFirebaseAuth } from "./firebaseMenu.js";
 
 const USERNAME = "maati";
 const DEFAULT_PASSWORD_HASH = "698f009ebe952425662e225de2682bb2dc79709f3efa1a5843c663678781d754";
@@ -29,6 +30,15 @@ export function isAdminSignedIn() {
   } catch {
     return false;
   }
+}
+
+export async function restoreAdminSession() {
+  if (!isAdminSignedIn()) return false;
+  if (!isFirebaseConfigured()) return true;
+  const user = await waitForFirebaseAuth();
+  if (user) return true;
+  signOutAdmin();
+  return false;
 }
 
 export function signOutAdmin() {

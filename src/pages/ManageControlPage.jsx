@@ -22,7 +22,7 @@ import ComboEditor from "../components/admin/ComboEditor.jsx";
 import ConfirmDialog from "../components/shared/ConfirmDialog.jsx";
 import DishImage from "../components/shared/DishImage.jsx";
 import { MenuDraftProvider, useMenuDraft } from "../context/MenuDraftContext.jsx";
-import { changeAdminPassword, isAdminSignedIn, signOutAdmin } from "../lib/adminAuth.js";
+import { changeAdminPassword, restoreAdminSession, signOutAdmin } from "../lib/adminAuth.js";
 import { ADMIN_PAGE_SIZE, ADMIN_SECURITY_NOTICE, DRAFT_NOTICE, OWNER_REVIEW_NOTICE } from "../lib/constants.js";
 import { formatPrice } from "../lib/format.js";
 import { slugify } from "../lib/ids.js";
@@ -34,8 +34,12 @@ import { getCategoryMap } from "../lib/menuVisibility.js";
 import { downloadMenuPdf, downloadQrSheetPdf, qrSheetLayout } from "../lib/pdfExport.js";
 
 export default function ManageControlPage() {
-  const [signedIn, setSignedIn] = useState(() => isAdminSignedIn());
+  const [signedIn, setSignedIn] = useState(null);
   const [boot, setBoot] = useState({ status: "loading" });
+
+  useEffect(() => {
+    restoreAdminSession().then(setSignedIn);
+  }, []);
 
   useEffect(() => {
     if (!signedIn) return undefined;
@@ -61,6 +65,10 @@ export default function ManageControlPage() {
       })
       .catch((error) => setBoot({ status: "error", message: error.message }));
   }, [signedIn]);
+
+  if (signedIn === null) {
+    return <div className="flex min-h-screen items-center justify-center bg-ivory">Loading management…</div>;
+  }
 
   if (!signedIn) {
     return <AdminLogin onSignedIn={() => setSignedIn(true)} />;
@@ -831,6 +839,10 @@ function ItemEditor({ item, onClose }) {
       });
       if (!committed.ok) {
         setError(committed.errors?.[0] || "The item could not be saved.");
+        return;
+      }
+      if (!committed.persisted) {
+        setError("The price was kept here, but guests did not get it. Sign out, sign in, and Save again.");
         return;
       }
       onClose();
